@@ -11,6 +11,7 @@ import {
   YoutubeLogo,
   LinkSimple,
   GitlabLogo,
+  Eye,
 } from "@phosphor-icons/react";
 import GmailLogo from "@/pages/Admin/Agents/GMailSkillPanel/gmail.png";
 import GoogleCalendarLogo from "@/pages/Admin/Agents/GoogleCalendarSkillPanel/google-calendar.png";
@@ -18,6 +19,8 @@ import OutlookLogo from "@/pages/Admin/Agents/OutlookSkillPanel/outlook.png";
 import { toPercentString } from "@/utils/numbers";
 import { useTranslation } from "react-i18next";
 import { useSourcesSidebar } from "../../ChatSidebar";
+import { useParams } from "react-router-dom";
+import SourceViewer from "../../SourceViewer";
 
 const CIRCLE_ICONS = {
   file: FileText,
@@ -110,14 +113,33 @@ export function SourceTypeCircle({
 export function combineLikeSources(sources) {
   const combined = {};
   sources.forEach((source) => {
-    const { id, title, text, chunkSource = "", score = null } = source;
+    const {
+      id,
+      title,
+      text,
+      chunkSource = "",
+      score = null,
+      sourceId = null,
+      hasSourceViewer = false,
+      contentType = null,
+    } = source;
     if (combined.hasOwnProperty(title)) {
-      combined[title].chunks.push({ id, text, chunkSource, score });
+      combined[title].chunks.push({
+        id,
+        text,
+        chunkSource,
+        score,
+        sourceId,
+        hasSourceViewer,
+        contentType,
+      });
       combined[title].references += 1;
     } else {
       combined[title] = {
         title,
-        chunks: [{ id, text, chunkSource, score }],
+        chunks: [
+          { id, text, chunkSource, score, sourceId, hasSourceViewer, contentType },
+        ],
         references: 1,
       };
     }
@@ -198,6 +220,11 @@ export function CitationDetailModal({ source, onClose }) {
   const { references, title, chunks } = source;
   const { isUrl, text: webpageUrl, href: linkTo } = parseChunkSource(source);
   const { t } = useTranslation();
+  const { slug } = useParams();
+  const [viewerSource, setViewerSource] = useState(null);
+
+  const canViewSource =
+    chunks[0]?.sourceId && chunks[0]?.hasSourceViewer;
 
   return (
     <ModalWrapper isOpen={!!source}>
@@ -224,11 +251,31 @@ export function CitationDetailModal({ source, onClose }) {
               </h3>
             )}
           </div>
-          {references > 1 && (
-            <p className="text-xs text-zinc-400 light:text-slate-500 mt-2">
-              Referenced {references} times.
-            </p>
-          )}
+          <div className="flex items-center gap-x-3 mt-2">
+            {references > 1 && (
+              <p className="text-xs text-zinc-400 light:text-slate-500">
+                Referenced {references} times.
+              </p>
+            )}
+            {canViewSource && (
+              <button
+                data-testid="view-source-btn"
+                onClick={() =>
+                  setViewerSource({
+                    title,
+                    sourceId: chunks[0].sourceId,
+                    contentType: chunks[0].contentType,
+                    hasSourceViewer: chunks[0].hasSourceViewer,
+                  })
+                }
+                type="button"
+                className="flex items-center gap-x-1 text-xs text-blue-400 light:text-blue-600 hover:text-blue-300 light:hover:text-blue-500 transition-colors"
+              >
+                <Eye size={14} weight="bold" />
+                <span>View source</span>
+              </button>
+            )}
+          </div>
           <button
             onClick={onClose}
             type="button"
@@ -280,6 +327,14 @@ export function CitationDetailModal({ source, onClose }) {
           </div>
         </div>
       </div>
+      {viewerSource && (
+        <SourceViewer
+          workspaceSlug={slug}
+          source={viewerSource}
+          chunk={chunks[0]}
+          onClose={() => setViewerSource(null)}
+        />
+      )}
     </ModalWrapper>
   );
 }
