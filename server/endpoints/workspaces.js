@@ -38,6 +38,7 @@ const { purgeDocument } = require("../utils/files/purgeDocument");
 const { getModelTag } = require("./utils");
 const { searchWorkspaceAndThreads } = require("../utils/helpers/search");
 const { workspaceParsedFilesEndpoints } = require("./workspacesParsedFiles");
+const { documentSourceEndpoints } = require("./documentSource");
 const {
   workspaceDeletionProtection,
 } = require("../utils/middleware/workspaceDeletionProtection");
@@ -1171,6 +1172,9 @@ function workspaceEndpoints(app) {
 
   // Parsed Files in separate endpoint just to keep the workspace endpoints clean
   workspaceParsedFilesEndpoints(app);
+
+  // Document source file serving (original files with Range support)
+  documentSourceEndpoints(app);
 }
 
 module.exports = { workspaceEndpoints };

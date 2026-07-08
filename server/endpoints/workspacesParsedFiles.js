@@ -164,6 +164,7 @@ function workspaceParsedFilesEndpoints(app) {
             const metadata = { ...doc };
             // Strip out pageContent
             delete metadata.pageContent;
+            delete metadata.pageContentHtml;
             const filename = `${originalname}-${doc.id}.json`;
             const { file, error: dbError } = await WorkspaceParsedFiles.create({
               filename,

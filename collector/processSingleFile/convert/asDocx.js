@@ -1,12 +1,25 @@
+const fs = require("fs");
 const { v4 } = require("uuid");
-const { DocxLoader } = require("langchain/document_loaders/fs/docx");
+const mammoth = require("mammoth");
 const {
   createdDate,
   trashFile,
   writeToServerDocuments,
+  persistOriginalFile,
 } = require("../../utils/files");
 const { tokenizeString } = require("../../utils/tokenizer");
 const { default: slugify } = require("slugify");
+
+/**
+ * Link-prefix patterns for sync-sourced documents that should NOT get a viewer.
+ */
+const LINK_PREFIXES = [
+  "link://",
+  "youtube://",
+  "confluence://",
+  "github://",
+  "gitlab://",
+];
 
 async function asDocX({
   fullFilePath = "",
@@ -14,15 +27,36 @@ async function asDocX({
   options = {},
   metadata = {},
 }) {
-  const loader = new DocxLoader(fullFilePath);
-
   console.log(`-- Working ${filename} --`);
-  let pageContent = [];
-  const docs = await loader.load();
-  for (const doc of docs) {
-    console.log(`-- Parsing content from docx page --`);
-    if (!doc.pageContent.length) continue;
-    pageContent.push(doc.pageContent);
+
+  let pageContent = "";
+  let pageContentHtml = null;
+
+  try {
+    const buffer = fs.readFileSync(fullFilePath);
+
+    // Extract raw text (same call LangChain DocxLoader used internally)
+    const raw = await mammoth.extractRawText({ buffer });
+    pageContent = raw.value;
+
+    // Attempt HTML conversion (non-fatal)
+    try {
+      const html = await mammoth.convertToHtml({ buffer });
+      pageContentHtml = html.value;
+    } catch (htmlErr) {
+      console.warn(
+        `[asDocx] HTML conversion failed for ${filename}: ${htmlErr.message}`
+      );
+      // pageContentHtml stays null — non-fatal
+    }
+  } catch (err) {
+    console.error(`[asDocx] Failed to parse ${filename}: ${err.message}`);
+    if (!options.absolutePath) trashFile(fullFilePath);
+    return {
+      success: false,
+      reason: `Failed to parse ${filename}: ${err.message}`,
+      documents: [],
+    };
   }
 
   if (!pageContent.length) {
@@ -35,7 +69,7 @@ async function asDocX({
     };
   }
 
-  const content = pageContent.join("");
+  const content = pageContent;
   const data = {
     id: v4(),
     url: "file://" + fullFilePath,
@@ -49,6 +83,28 @@ async function asDocX({
     pageContent: content,
     token_count_estimate: tokenizeString(content),
   };
+
+  // Source-viewer: HTML representation
+  if (pageContentHtml) {
+    data.pageContentHtml = pageContentHtml;
+  }
+
+  // Source-viewer: persist original + metadata fields
+  data.sourceId = data.id;
+  data.contentType = "docx";
+
+  const linkPrefixedChunkSource =
+    data.chunkSource &&
+    LINK_PREFIXES.some((prefix) => data.chunkSource.startsWith(prefix));
+
+  const { persisted } = persistOriginalFile({
+    fullFilePath,
+    sourceId: data.id,
+    extension: ".docx",
+  });
+
+  data.hasSourceViewer =
+    persisted && !!data.pageContentHtml && !linkPrefixedChunkSource;
 
   const document = writeToServerDocuments({
     data,

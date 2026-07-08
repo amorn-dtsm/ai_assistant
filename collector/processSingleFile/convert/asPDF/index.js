@@ -3,11 +3,23 @@ const {
   createdDate,
   trashFile,
   writeToServerDocuments,
+  persistOriginalFile,
+  writeOcrSidecar,
 } = require("../../../utils/files");
 const { tokenizeString } = require("../../../utils/tokenizer");
 const { default: slugify } = require("slugify");
 const PDFLoader = require("./PDFLoader");
 const OCRLoader = require("../../../utils/OCRLoader");
+
+/** Clamp a number to [0, 1]. */
+function clamp01(v) {
+  return Math.max(0, Math.min(1, v));
+}
+
+/** Round to 4 decimal places. */
+function round4(v) {
+  return Math.round(v * 10000) / 10000;
+}
 
 async function asPdf({
   fullFilePath = "",
@@ -22,6 +34,7 @@ async function asPdf({
   console.log(`-- Working ${filename} --`);
   const pageContent = [];
   let docs = await pdfLoader.load();
+  let usedOCR = false;
 
   if (docs.length === 0) {
     console.log(
@@ -30,6 +43,7 @@ async function asPdf({
     docs = await new OCRLoader({
       targetLanguages: options?.ocr?.langList,
     }).ocrPDF(fullFilePath);
+    usedOCR = true;
   }
 
   for (const doc of docs) {
@@ -72,6 +86,72 @@ async function asPdf({
     pageContent: content,
     token_count_estimate: tokenizeString(content),
   };
+
+  // Persist original file and add retention metadata
+  const { persisted } = persistOriginalFile({
+    fullFilePath,
+    sourceId: data.id,
+    extension: ".pdf",
+  });
+
+  // Check if chunkSource is a sync-source (link-prefixed)
+  const linkPrefixes = ["link://", "youtube://", "confluence://", "github://", "gitlab://"];
+  const isLinkPrefixed = typeof metadata.chunkSource === "string" && 
+    linkPrefixes.some(prefix => metadata.chunkSource.startsWith(prefix));
+
+  data.sourceId = data.id;
+  data.contentType = usedOCR ? "scanned-pdf" : "pdf";
+
+  // Build + write OCR geometry sidecar for scanned PDFs only
+  let sidecarWritten = false;
+  if (usedOCR && persisted && !isLinkPrefixed) {
+    try {
+      const pages = [];
+      for (const doc of docs) {
+        const ocr = doc.metadata?.ocr;
+        if (!ocr) continue;
+        const pgNum = doc.metadata?.loc?.pageNumber;
+        if (!pgNum) continue;
+        const { width, height, lines } = ocr;
+        if (!width || !height || !Array.isArray(lines) || lines.length === 0)
+          continue;
+        pages.push({
+          pageNumber: pgNum,
+          width,
+          height,
+          lines: lines.map((l) => ({
+            text: l.text,
+            bbox: [
+              round4(clamp01(l.bbox.x0 / width)),
+              round4(clamp01(l.bbox.y0 / height)),
+              round4(clamp01(l.bbox.x1 / width)),
+              round4(clamp01(l.bbox.y1 / height)),
+            ],
+          })),
+        });
+      }
+      if (pages.length > 0) {
+        const payload = {
+          version: 1,
+          sourceId: data.id,
+          contentType: "scanned-pdf",
+          pages,
+        };
+        const { written } = writeOcrSidecar({ sourceId: data.id, payload });
+        sidecarWritten = written === true;
+      }
+    } catch (err) {
+      console.error(`[asPDF] Sidecar build error: ${err.message}`);
+    }
+  }
+
+  // Born-digital: hasSourceViewer = persisted (no sidecar needed)
+  // Scanned: hasSourceViewer = persisted AND sidecar written
+  if (usedOCR) {
+    data.hasSourceViewer = persisted === true && sidecarWritten && !isLinkPrefixed;
+  } else {
+    data.hasSourceViewer = persisted === true && !isLinkPrefixed;
+  }
 
   const document = writeToServerDocuments({
     data,

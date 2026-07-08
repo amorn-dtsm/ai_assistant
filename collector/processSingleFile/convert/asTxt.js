@@ -1,10 +1,12 @@
 const { v4 } = require("uuid");
 const fs = require("fs");
+const path = require("path");
 const { tokenizeString } = require("../../utils/tokenizer");
 const {
   createdDate,
   trashFile,
   writeToServerDocuments,
+  persistOriginalFile,
 } = require("../../utils/files");
 const { default: slugify } = require("slugify");
 
@@ -45,6 +47,34 @@ async function asTxt({
     pageContent: content,
     token_count_estimate: tokenizeString(content),
   };
+
+  // Determine real extension and map to contentType
+  const realExtension = path.extname(filename).toLowerCase();
+  let contentType = "txt"; // default
+  if (realExtension === ".md") {
+    contentType = "md";
+  } else if (realExtension === ".txt") {
+    contentType = "txt";
+  } else {
+    // .html, .csv, .json, .org, .adoc, .rst, etc. → "txt"
+    contentType = "txt";
+  }
+
+  // Persist original file
+  const { persisted } = persistOriginalFile({
+    fullFilePath,
+    sourceId: data.id,
+    extension: realExtension,
+  });
+
+  // Check if chunkSource is a sync-source (link-prefixed)
+  const linkPrefixes = ["link://", "youtube://", "confluence://", "github://", "gitlab://"];
+  const isLinkPrefixed = typeof metadata.chunkSource === "string" && 
+    linkPrefixes.some(prefix => metadata.chunkSource.startsWith(prefix));
+
+  data.sourceId = data.id;
+  data.contentType = contentType;
+  data.hasSourceViewer = persisted && ["md", "txt"].includes(contentType) && !isLinkPrefixed;
 
   const document = writeToServerDocuments({
     data,

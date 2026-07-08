@@ -136,7 +136,11 @@ async function getDocumentsByFolder(folderName = "") {
     const filePath = path.join(folderPath, file);
     const rawData = fs.readFileSync(filePath, "utf8");
     const cachefilename = `${folderName}/${file}`;
-    const { pageContent: _pageContent, ...metadata } = JSON.parse(rawData);
+    const {
+      pageContent: _pageContent,
+      pageContentHtml: _pageContentHtml,
+      ...metadata
+    } = JSON.parse(rawData);
     documents.push({
       name: file,
       type: "file",
@@ -202,6 +206,8 @@ async function storeVectorResult(vectorData = [], filename = null) {
 }
 
 // Purges a file from the documents/ folder.
+// After removing the doc JSON, best-effort cascades deletion to any
+// originals/<sourceId>.* and ocr/<sourceId>.json sidecars.
 async function purgeSourceDocument(filename = null) {
   if (!filename) return;
   const filePath = path.resolve(documentsPath, normalizePath(filename));
@@ -213,9 +219,72 @@ async function purgeSourceDocument(filename = null) {
   )
     return;
 
+  // Try to read sourceId from the doc JSON BEFORE unlinking so we can
+  // cascade-delete the original file and OCR sidecar afterwards.
+  let sourceId = null;
+  try {
+    const raw = fs.readFileSync(filePath, "utf8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.sourceId === "string" && parsed.sourceId)
+      sourceId = parsed.sourceId;
+  } catch {
+    // Could not read / parse — proceed with normal purge
+  }
+
   console.log(`Purging source document of ${filename}.`);
   fs.rmSync(filePath);
+
+  // Cascade: best-effort removal of originals and OCR sidecars.
+  // Never throws — failures are warned and swallowed.
+  if (sourceId) {
+    _cascadeDeleteSidecars(sourceId);
+  }
+
   return;
+}
+
+/**
+ * Best-effort delete originals/<sourceId>.* (glob) and ocr/<sourceId>.json.
+ * Logs warnings on failure but never throws.
+ * @param {string} sourceId - UUID of the source document.
+ */
+function _cascadeDeleteSidecars(sourceId) {
+  // --- Originals: glob match originals/<sourceId>.* ---
+  const originalsDir = path.resolve(documentsPath, "originals");
+  try {
+    if (fs.existsSync(originalsDir)) {
+      const prefix = `${sourceId}.`;
+      const entries = fs.readdirSync(originalsDir);
+      for (const entry of entries) {
+        if (!entry.startsWith(prefix)) continue;
+        const candidate = path.resolve(originalsDir, entry);
+        if (!isWithin(documentsPath, candidate)) continue;
+        try {
+          fs.unlinkSync(candidate);
+          console.log(`Cascade-deleted original: originals/${entry}`);
+        } catch (err) {
+          console.warn(
+            `Cascade: could not delete originals/${entry}: ${err.message}`
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`Cascade: originals scan failed: ${err.message}`);
+  }
+
+  // --- OCR sidecar: ocr/<sourceId>.json ---
+  const ocrFile = path.resolve(documentsPath, "ocr", `${sourceId}.json`);
+  try {
+    if (isWithin(documentsPath, ocrFile) && fs.existsSync(ocrFile)) {
+      fs.unlinkSync(ocrFile);
+      console.log(`Cascade-deleted OCR sidecar: ocr/${sourceId}.json`);
+    }
+  } catch (err) {
+    console.warn(
+      `Cascade: could not delete ocr/${sourceId}.json: ${err.message}`
+    );
+  }
 }
 
 // Purges a vector-cache file from the vector-cache/ folder.
@@ -251,7 +320,11 @@ async function findDocumentInDocuments(documentName = null) {
 
     const fileData = fs.readFileSync(targetFileLocation, "utf8");
     const cachefilename = `${folder}/${targetFilename}`;
-    const { pageContent: _pageContent, ...metadata } = JSON.parse(fileData);
+    const {
+      pageContent: _pageContent,
+      pageContentHtml: _pageContentHtml,
+      ...metadata
+    } = JSON.parse(fileData);
     return {
       name: targetFilename,
       type: "file",
@@ -422,6 +495,7 @@ async function fileToPickerData({
       metadata = JSON.parse(rawData);
       // Remove the pageContent field from the metadata - it is large and not needed for the picker
       delete metadata.pageContent;
+      delete metadata.pageContentHtml;
     } catch (err) {
       console.error("Error parsing file", err);
       return null;
@@ -455,6 +529,7 @@ async function fileToPickerData({
           metadata = JSON.parse(fileContent);
           // Remove the pageContent field from the metadata - it is large and not needed for the picker
           delete metadata.pageContent;
+          delete metadata.pageContentHtml;
           resolve(metadata);
         })
         .on("error", (err) => {
