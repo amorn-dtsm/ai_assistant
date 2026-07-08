@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import DocumentSource from "@/models/documentSource";
 import renderMarkdown from "@/utils/chat/markdown";
 import DOMPurify from "@/utils/chat/purify";
@@ -198,7 +198,35 @@ export default function ReflowView({
     const { haystack, spans } = buildHaystack(nodeData);
 
     const { norm, map } = normalizeForMatch(haystack);
-    const needle = prepareSearchKey(chunkText).norm;
+
+    // Derive needle: for markdown, strip syntax so needle lives in the same
+    // rendered-text space as the haystack (which comes from DOM text nodes
+    // that already had markdown syntax removed by the renderer).
+    const cleaned = prepareSearchKey(chunkText);
+    let needle;
+    if (isMd) {
+      const rendered = DOMPurify.sanitize(renderMarkdown(cleaned.raw));
+      const scratch = document.createElement("div");
+      scratch.innerHTML = rendered;
+      scratch
+        .querySelectorAll("pre code, .katex")
+        .forEach((el) => el.remove());
+      // Walk text nodes (same method as haystack) — innerText on a
+      // detached element omits block-boundary whitespace.
+      const tw = document.createTreeWalker(
+        scratch,
+        NodeFilter.SHOW_TEXT,
+        null
+      );
+      let stripped = "";
+      while (tw.nextNode()) stripped += tw.currentNode.data;
+      // Clean up unrendered markdown artifacts left by truncated
+      // chunk text (e.g. incomplete [link](url syntax).
+      stripped = stripped.replace(/!?\[([^\]]*)\]\([^)]*\)?/g, "$1");
+      needle = normalizeForMatch(stripped).norm;
+    } else {
+      needle = cleaned.norm;
+    }
 
     // --- Match: exact first, then fuzzy ---
     let hit = flexFind(norm, needle);
@@ -251,9 +279,10 @@ export default function ReflowView({
       CSS.highlights.set("anythingllm-citation", hl);
 
       const style = document.createElement("style");
+      style.setAttribute("data-citation-highlight", "");
       style.textContent =
         "::highlight(anythingllm-citation){background-color:rgba(255,235,59,.45)}";
-      container.prepend(style);
+      document.head.appendChild(style);
 
       cleanupRef.current = () => {
         CSS.highlights.delete("anythingllm-citation");
@@ -280,7 +309,19 @@ export default function ReflowView({
       cleanupRef.current?.();
       cleanupRef.current = null;
     };
-  }, [content, chunkText, contentType, onMatchQuality]);
+   }, [content, chunkText, contentType, onMatchQuality]);
+
+  // Memoize rendered markdown so React preserves DOM nodes across
+  // re-renders triggered by the match-quality state update.
+  const pageContent = content?.pageContent;
+  const pageContentHtml = content?.pageContentHtml;
+  const mdDIH = useMemo(
+    () =>
+      contentType === "md" && pageContent
+        ? { __html: DOMPurify.sanitize(renderMarkdown(pageContent)) }
+        : null,
+    [contentType, pageContent]
+  );
 
   // ── Error → throw to nearest ErrorBoundary ───────────────────────
   if (error) throw error;
@@ -297,15 +338,12 @@ export default function ReflowView({
   }
 
   // ── Render by contentType ────────────────────────────────────────
-  const { pageContent, pageContentHtml } = content;
-
   if (contentType === "md") {
-    const html = DOMPurify.sanitize(renderMarkdown(pageContent));
     return (
       <div
         ref={containerRef}
         className="reflow-md prose prose-invert prose-sm max-w-none px-4 py-3 text-white/90 leading-relaxed overflow-y-auto"
-        dangerouslySetInnerHTML={{ __html: html }}
+        dangerouslySetInnerHTML={mdDIH}
       />
     );
   }

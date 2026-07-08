@@ -1,366 +1,255 @@
 #!/usr/bin/env node
 /**
- * Fixture generator for source-viewer tests
- * Idempotent: safe to run multiple times
+ * Fixture generator for source-viewer tests (v2)
+ * Idempotent: always regenerates all fixtures (overwrite).
+ * All PDFs generated via Puppeteer/Chromium for spec-compliant output.
  */
 
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { writeFileSync, readFileSync, existsSync, mkdirSync } from 'fs';
+import { writeFileSync } from 'fs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load dependencies from collector's node_modules
 const require2 = createRequire(new URL('../../collector/package.json', import.meta.url));
 const sharp = require2('sharp');
 const AdmZip = require2('adm-zip');
-const mammoth = require2('mammoth');
 const puppeteer = require2('puppeteer');
 
 const ANCHOR_LATIN = 'The quick brown fox anchors here.';
-const ANCHOR_THAI = 'การทดสอบระบบค้นหาข้อความภาษาไทย';
+const ANCHOR_THAI = '\u0e01\u0e32\u0e23\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e23\u0e30\u0e1a\u0e1a\u0e04\u0e49\u0e19\u0e2b\u0e32\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22';
+const CHROME_PATH =
+  'C:/Users/amorn.t/.cache/puppeteer/chrome/win64-131.0.6778.204/chrome-win64/chrome.exe';
+const FONT_CSS = "'TH SarabunNew','TH Sarabun New',Tahoma";
+const FONT_SVG = 'TH SarabunNew, Tahoma';
 
-console.log('🔧 Generating test fixtures...\n');
+console.log('Generating test fixtures (v2)...\n');
 
-// ============================================================================
-// 1. digital-latin.pdf - 2 pages, born-digital, contains anchor in text layer
-// ============================================================================
-async function generateDigitalLatinPdf() {
-  const filename = join(__dirname, 'digital-latin.pdf');
-  if (existsSync(filename)) {
-    console.log('✓ digital-latin.pdf exists');
-    return;
-  }
-
-  // Build PDF with proper offsets
-  const parts = [];
-  const offsets = {};
-
-  // Header
-  parts.push('%PDF-1.4\n');
-  
-  // Object 1: Catalog
-  offsets[1] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
-  
-  // Object 2: Pages
-  offsets[2] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push('2 0 obj\n<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>\nendobj\n');
-  
-  // Object 3: Page 1
-  offsets[3] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /Font << /F1 6 0 R >> >> >>\nendobj\n');
-  
-  // Object 4: Page 2
-  offsets[4] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push('4 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /Font << /F1 6 0 R >> >> >>\nendobj\n');
-  
-  // Object 5: Content stream 1
-  const stream1 = `BT\n/F1 12 Tf\n50 700 Td\n(${ANCHOR_LATIN}) Tj\nET\n`;
-  offsets[5] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push(`5 0 obj\n<< /Length ${stream1.length} >>\nstream\n${stream1}endstream\nendobj\n`);
-  
-  // Object 6: Font
-  offsets[6] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push('6 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n');
-  
-  // Object 7: Content stream 2
-  const stream2 = 'BT\n/F1 12 Tf\n50 700 Td\n(Page 2 content) Tj\nET\n';
-  offsets[7] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push(`7 0 obj\n<< /Length ${stream2.length} >>\nstream\n${stream2}endstream\nendobj\n`);
-  
-  // xref
-  const xrefOffset = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-  parts.push('xref\n0 8\n');
-  parts.push('0000000000 65535 f \n');
-  for (let i = 1; i <= 7; i++) {
-    parts.push(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`);
-  }
-  
-  // Trailer
-  parts.push('trailer\n<< /Size 8 /Root 1 0 R >>\n');
-  parts.push('startxref\n');
-  parts.push(`${xrefOffset}\n`);
-  parts.push('%%EOF');
-
-  const pdf = Buffer.from(parts.join(''), 'utf8');
-  writeFileSync(filename, pdf);
-  console.log('✓ digital-latin.pdf created (2 pages, text layer)');
-}
-
-// ============================================================================
-// 2. digital-thai.pdf - born-digital with Thai text (using puppeteer)
-// ============================================================================
-async function generateDigitalThaiPdf() {
-  const filename = join(__dirname, 'digital-thai.pdf');
-  if (existsSync(filename)) {
-    console.log('✓ digital-thai.pdf exists');
-    return;
-  }
-
-  try {
-    const browser = await puppeteer.launch({ 
+/* ---------- shared browser ---------- */
+let _browser = null;
+async function getBrowser() {
+  if (!_browser) {
+    _browser = await puppeteer.launch({
       headless: 'new',
-      executablePath: 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
+      executablePath: CHROME_PATH,
     });
-    const page = await browser.newPage();
-    
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="UTF-8">
-        <style>
-          body { font-family: Tahoma, 'Leelawadee UI', sans-serif; margin: 40px; }
-          h1 { font-size: 20px; color: #000; }
-          p { font-size: 14px; line-height: 1.6; }
-        </style>
-      </head>
-      <body>
-        <h1>${ANCHOR_THAI}</h1>
-        <p>เอกสารนี้ใช้สำหรับทดสอบการค้นหาและไฮไลต์ข้อความภาษาไทยในระบบ</p>
-        <p>${ANCHOR_LATIN}</p>
-      </body>
-      </html>
-    `;
-    
-    await page.setContent(htmlContent, { waitUntil: 'networkidle0' });
-    await page.pdf({ path: filename, format: 'A4' });
-    await browser.close();
-    
-    console.log('✓ digital-thai.pdf created (Thai text via puppeteer)');
-  } catch (error) {
-    console.error('✗ Puppeteer error for Thai PDF:', error.message);
-    console.log('  Falling back to hex-encoded PDF...');
-    
-    // Fallback: hand-rolled PDF with hex encoding
-    const thaiHex = Buffer.from(ANCHOR_THAI, 'utf8').toString('hex');
-    const parts = [];
-    const offsets = {};
-
-    parts.push('%PDF-1.4\n');
-    offsets[1] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-    parts.push('1 0 obj\n<< /Type /Catalog /Pages 2 0 R >>\nendobj\n');
-    
-    offsets[2] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-    parts.push('2 0 obj\n<< /Type /Pages /Kids [3 0 R] /Count 1 >>\nendobj\n');
-    
-    offsets[3] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-    parts.push('3 0 obj\n<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>\nendobj\n');
-    
-    const stream = `BT\n/F1 12 Tf\n50 700 Td\n<${thaiHex}> Tj\nET\n`;
-    offsets[4] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-    parts.push(`4 0 obj\n<< /Length ${stream.length} >>\nstream\n${stream}endstream\nendobj\n`);
-    
-    offsets[5] = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-    parts.push('5 0 obj\n<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>\nendobj\n');
-    
-    const xrefOffset = parts.reduce((sum, p) => sum + Buffer.byteLength(p, 'utf8'), 0);
-    parts.push('xref\n0 6\n0000000000 65535 f \n');
-    for (let i = 1; i <= 5; i++) {
-      parts.push(`${String(offsets[i]).padStart(10, '0')} 00000 n \n`);
-    }
-    parts.push('trailer\n<< /Size 6 /Root 1 0 R >>\nstartxref\n');
-    parts.push(`${xrefOffset}\n%%EOF`);
-
-    const pdf = Buffer.from(parts.join(''), 'utf8');
-    writeFileSync(filename, pdf);
-    console.log('✓ digital-thai.pdf created (fallback: hex-encoded)');
   }
+  return _browser;
 }
 
-// ============================================================================
-// 3. scanned.pdf - 2 pages, image-only (no text layer)
-// ============================================================================
-async function generateScannedPdf() {
-  const filename = join(__dirname, 'scanned.pdf');
-  if (existsSync(filename)) {
-    console.log('✓ scanned.pdf exists');
-    return;
-  }
+/* ---------- DOCX helpers ---------- */
+const RFONT = '<w:rFonts w:ascii="TH SarabunNew" w:hAnsi="TH SarabunNew" w:cs="TH SarabunNew"/>';
+const SZCS  = '<w:szCs w:val="32"/>';
+const RPR   = `<w:rPr>${RFONT}${SZCS}</w:rPr>`;
 
-  // Create 2 PNG images with text rendered at 14pt
-  const page1Svg = `<svg width="612" height="792" xmlns="http://www.w3.org/2000/svg">
-    <rect width="612" height="792" fill="white"/>
-    <text x="50" y="100" font-family="Arial" font-size="14" fill="black">
-      ${ANCHOR_LATIN}
-    </text>
-    <text x="50" y="150" font-family="Arial" font-size="14" fill="black">
-      This is page 1 of a scanned document.
-    </text>
-  </svg>`;
-
-  const page2Svg = `<svg width="612" height="792" xmlns="http://www.w3.org/2000/svg">
-    <rect width="612" height="792" fill="white"/>
-    <text x="50" y="100" font-family="Arial" font-size="14" fill="black">
-      This is page 2 of the scanned document.
-    </text>
-    <text x="50" y="150" font-family="Arial" font-size="14" fill="black">
-      No text layer present in this PDF.
-    </text>
-  </svg>`;
-
-  // Convert SVGs to PNGs
-  const page1Png = await sharp(Buffer.from(page1Svg)).png().toBuffer();
-  const page2Png = await sharp(Buffer.from(page2Svg)).png().toBuffer();
-
-  // Create PDF with embedded images
-  const pdf = Buffer.from(
-    `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R 4 0 R] /Count 2 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 5 0 R /Resources << /XObject << /Im1 6 0 R >> >> >>
-endobj
-4 0 obj
-<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 7 0 R /Resources << /XObject << /Im2 8 0 R >> >> >>
-endobj
-5 0 obj
-<< /Length 44 >>
-stream
-q
-612 0 0 792 0 0 cm
-/Im1 Do
-Q
-endstream
-endobj
-6 0 obj
-<< /Type /XObject /Subtype /Image /Width 612 /Height 792 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${page1Png.length} >>
-stream
-${page1Png.toString('binary')}
-endstream
-endobj
-7 0 obj
-<< /Length 44 >>
-stream
-q
-612 0 0 792 0 0 cm
-/Im2 Do
-Q
-endstream
-endobj
-8 0 obj
-<< /Type /XObject /Subtype /Image /Width 612 /Height 792 /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length ${page2Png.length} >>
-stream
-${page2Png.toString('binary')}
-endstream
-endobj
-xref
-0 9
-0000000000 65535 f 
-0000000009 00000 n 
-0000000058 00000 n 
-0000000115 00000 n 
-0000000229 00000 n 
-0000000343 00000 n 
-0000000437 00000 n 
-trailer
-<< /Size 9 /Root 1 0 R >>
-startxref
-999999
-%%EOF`,
-    'latin1'
-  );
-
-  writeFileSync(filename, pdf);
-  console.log('✓ scanned.pdf created (2 pages, image-only, no text layer)');
+function run(text) {
+  return `<w:r>${RPR}<w:t xml:space="preserve">${text}</w:t></w:r>`;
+}
+function para(text, style) {
+  const pPr = style ? `<w:pPr><w:pStyle w:val="${style}"/></w:pPr>` : '';
+  return `<w:p>${pPr}${run(text)}</w:p>`;
+}
+function cell(text) {
+  return `<w:tc>${para(text)}</w:tc>`;
 }
 
-// ============================================================================
-// 4. simple.docx - h1, paragraphs, 2x2 table with anchor sentence
-// ============================================================================
-async function generateSimpleDocx() {
-  const filename = join(__dirname, 'simple.docx');
-  if (existsSync(filename)) {
-    console.log('✓ simple.docx exists');
-    return;
-  }
-
-  const zip = new AdmZip();
-
-  // [Content_Types].xml
-  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+const DOCX_CONTENT_TYPES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>`;
 
-  // _rels/.rels
-  const rels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+const DOCX_ROOT_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
 
-  // word/document.xml with h1, paragraphs, and 2x2 table
-  const document = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:body>
-    <w:p>
-      <w:pPr>
-        <w:pStyle w:val="Heading1"/>
-      </w:pPr>
-      <w:r>
-        <w:t>Test Document</w:t>
-      </w:r>
-    </w:p>
-    <w:p>
-      <w:r>
-        <w:t>${ANCHOR_LATIN}</w:t>
-      </w:r>
-    </w:p>
-    <w:p>
-      <w:r>
-        <w:t>This is a test paragraph.</w:t>
-      </w:r>
-    </w:p>
-    <w:tbl>
-      <w:tblPr>
-        <w:tblW w:w="5000" w:type="auto"/>
-      </w:tblPr>
-      <w:tr>
-        <w:tc><w:p><w:r><w:t>Cell 1</w:t></w:r></w:p></w:tc>
-        <w:tc><w:p><w:r><w:t>Cell 2</w:t></w:r></w:p></w:tc>
-      </w:tr>
-      <w:tr>
-        <w:tc><w:p><w:r><w:t>Cell 3</w:t></w:r></w:p></w:tc>
-        <w:tc><w:p><w:r><w:t>Cell 4</w:t></w:r></w:p></w:tc>
-      </w:tr>
-    </w:tbl>
-  </w:body>
-</w:document>`;
+const DOCX_STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:docDefaults>
+    <w:rPrDefault>
+      <w:rPr>
+        ${RFONT}
+        <w:sz w:val="28"/>
+        ${SZCS}
+      </w:rPr>
+    </w:rPrDefault>
+  </w:docDefaults>
+</w:styles>`;
 
-  // word/_rels/document.xml.rels
-  const docRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+const DOCX_DOC_RELS = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
 </Relationships>`;
 
-  zip.addFile('[Content_Types].xml', Buffer.from(contentTypes, 'utf8'));
-  zip.addFile('_rels/.rels', Buffer.from(rels, 'utf8'));
-  zip.addFile('word/document.xml', Buffer.from(document, 'utf8'));
-  zip.addFile('word/_rels/document.xml.rels', Buffer.from(docRels, 'utf8'));
-
+function buildDocx(filename, documentXml) {
+  const zip = new AdmZip();
+  zip.addFile('[Content_Types].xml', Buffer.from(DOCX_CONTENT_TYPES, 'utf8'));
+  zip.addFile('_rels/.rels', Buffer.from(DOCX_ROOT_RELS, 'utf8'));
+  zip.addFile('word/document.xml', Buffer.from(documentXml, 'utf8'));
+  zip.addFile('word/styles.xml', Buffer.from(DOCX_STYLES, 'utf8'));
+  zip.addFile('word/_rels/document.xml.rels', Buffer.from(DOCX_DOC_RELS, 'utf8'));
   zip.writeZip(filename);
-  console.log('✓ simple.docx created (h1, paragraphs, 2x2 table)');
 }
 
 // ============================================================================
-// 5. sample.md - GFM with h1, h2, table, code fence, bold, link
+// 1. digital-latin.pdf — 2 pages, born-digital, Latin + Thai
+// ============================================================================
+async function generateDigitalLatinPdf() {
+  const file = join(__dirname, 'digital-latin.pdf');
+  const b = await getBrowser();
+  const page = await b.newPage();
+
+  await page.setContent(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+  body { font-family: ${FONT_CSS}; margin: 40px; }
+  .break { page-break-after: always; }
+  .thai  { font-size: 18pt; }
+  p { font-size: 14px; line-height: 1.6; }
+</style></head><body>
+<div class="break">
+  <h1>Test Document — Page 1</h1>
+  <p>${ANCHOR_LATIN}</p>
+  <p class="thai">${ANCHOR_THAI}</p>
+</div>
+<div>
+  <h1>Test Document — Page 2</h1>
+  <p>Additional content on the second page.</p>
+  <p class="thai">${ANCHOR_THAI}</p>
+</div>
+</body></html>`, { waitUntil: 'networkidle0' });
+
+  await page.pdf({ path: file, format: 'A4' });
+  await page.close();
+  console.log('  digital-latin.pdf  (2pp, Latin+Thai, Chromium)');
+}
+
+// ============================================================================
+// 2. digital-thai.pdf — born-digital, Thai-primary + Latin anchor
+// ============================================================================
+async function generateDigitalThaiPdf() {
+  const file = join(__dirname, 'digital-thai.pdf');
+  const b = await getBrowser();
+  const page = await b.newPage();
+
+  await page.setContent(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+  body { font-family: ${FONT_CSS}; margin: 40px; font-size: 18pt; }
+  h1 { font-size: 24pt; }
+  p { line-height: 1.6; }
+</style></head><body>
+  <h1>${ANCHOR_THAI}</h1>
+  <p>\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e19\u0e35\u0e49\u0e43\u0e0a\u0e49\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e01\u0e32\u0e23\u0e04\u0e49\u0e19\u0e2b\u0e32\u0e41\u0e25\u0e30\u0e44\u0e2e\u0e44\u0e25\u0e17\u0e4c\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22\u0e43\u0e19\u0e23\u0e30\u0e1a\u0e1a</p>
+  <p>${ANCHOR_LATIN}</p>
+</body></html>`, { waitUntil: 'networkidle0' });
+
+  await page.pdf({ path: file, format: 'A4' });
+  await page.close();
+  console.log('  digital-thai.pdf   (Thai+Latin, Chromium)');
+}
+
+// ============================================================================
+// 3. scanned.pdf — 2 pages, image-only, ZERO text layer
+// ============================================================================
+async function generateScannedPdf() {
+  const file = join(__dirname, 'scanned.pdf');
+
+  // Render text as images via sharp SVG→PNG
+  const p1Svg = `<svg width="1240" height="1754" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1240" height="1754" fill="white"/>
+    <text x="80" y="200" font-family="${FONT_SVG}" font-size="32" fill="black">${ANCHOR_LATIN}</text>
+    <text x="80" y="280" font-family="${FONT_SVG}" font-size="28" fill="black">This is page 1 of a scanned document.</text>
+    <text x="80" y="360" font-family="${FONT_SVG}" font-size="28" fill="black">No text layer present in this PDF.</text>
+  </svg>`;
+
+  const p2Svg = `<svg width="1240" height="1754" xmlns="http://www.w3.org/2000/svg">
+    <rect width="1240" height="1754" fill="white"/>
+    <text x="80" y="200" font-family="${FONT_SVG}" font-size="32" fill="black">${ANCHOR_THAI}</text>
+    <text x="80" y="280" font-family="${FONT_SVG}" font-size="28" fill="black">\u0e2b\u0e19\u0e49\u0e32\u0e17\u0e35\u0e48 2 \u0e02\u0e2d\u0e07\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e17\u0e35\u0e48\u0e2a\u0e41\u0e01\u0e19</text>
+    <text x="80" y="360" font-family="${FONT_SVG}" font-size="28" fill="black">\u0e44\u0e21\u0e48\u0e21\u0e35\u0e40\u0e25\u0e40\u0e22\u0e2d\u0e23\u0e4c\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21\u0e43\u0e19\u0e44\u0e1f\u0e25\u0e4c PDF \u0e19\u0e35\u0e49</text>
+  </svg>`;
+
+  const p1Png = await sharp(Buffer.from(p1Svg)).png().toBuffer();
+  const p2Png = await sharp(Buffer.from(p2Svg)).png().toBuffer();
+
+  const p1Url = `data:image/png;base64,${p1Png.toString('base64')}`;
+  const p2Url = `data:image/png;base64,${p2Png.toString('base64')}`;
+
+  const b = await getBrowser();
+  const page = await b.newPage();
+
+  await page.setContent(`<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><style>
+  @page { margin: 0; }
+  * { margin:0; padding:0; }
+  img { display:block; width:210mm; height:297mm; object-fit:contain; }
+  img+img { page-break-before:always; }
+</style></head><body>
+<img src="${p1Url}" alt=""/>
+<img src="${p2Url}" alt=""/>
+</body></html>`, { waitUntil: 'networkidle0' });
+
+  await page.pdf({ path: file, format: 'A4', printBackground: true, margin: {top:0,right:0,bottom:0,left:0} });
+  await page.close();
+  console.log('  scanned.pdf        (2pp, image-only, Chromium)');
+}
+
+// ============================================================================
+// 4. simple.docx — h1, paragraphs, table, Latin + Thai anchors
+// ============================================================================
+async function generateSimpleDocx() {
+  const file = join(__dirname, 'simple.docx');
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${para('Test Document', 'Heading1')}
+    ${para(ANCHOR_LATIN)}
+    ${para('This is a test paragraph.')}
+    ${para(ANCHOR_THAI)}
+    <w:tbl>
+      <w:tblPr><w:tblW w:w="5000" w:type="auto"/></w:tblPr>
+      <w:tr>${cell('Cell 1')}${cell('Cell 2')}</w:tr>
+      <w:tr>${cell('Cell 3')}${cell('Cell 4')}</w:tr>
+    </w:tbl>
+  </w:body>
+</w:document>`;
+  buildDocx(file, doc);
+  console.log('  simple.docx        (h1, table, Latin+Thai)');
+}
+
+// ============================================================================
+// 5. thai-sarabun.docx — Thai-primary, TH SarabunNew font
+// ============================================================================
+async function generateThaiSarabunDocx() {
+  const file = join(__dirname, 'thai-sarabun.docx');
+  const doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${para('\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22', 'Heading1')}
+    ${para(ANCHOR_THAI)}
+    ${para('\u0e40\u0e2d\u0e01\u0e2a\u0e32\u0e23\u0e19\u0e35\u0e49\u0e43\u0e0a\u0e49\u0e2a\u0e33\u0e2b\u0e23\u0e31\u0e1a\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e01\u0e32\u0e23\u0e41\u0e2a\u0e14\u0e07\u0e1c\u0e25\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22\u0e14\u0e49\u0e27\u0e22\u0e1f\u0e2d\u0e19\u0e15\u0e4c TH SarabunNew')}
+    <w:tbl>
+      <w:tblPr><w:tblW w:w="5000" w:type="auto"/></w:tblPr>
+      <w:tr>${cell('\u0e2b\u0e31\u0e27\u0e02\u0e49\u0e2d')}${cell('\u0e23\u0e32\u0e22\u0e25\u0e30\u0e40\u0e2d\u0e35\u0e22\u0e14')}</w:tr>
+      <w:tr>${cell('\u0e0a\u0e37\u0e48\u0e2d')}${cell('\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e23\u0e30\u0e1a\u0e1a')}</w:tr>
+    </w:tbl>
+    ${para(ANCHOR_LATIN)}
+  </w:body>
+</w:document>`;
+  buildDocx(file, doc);
+  console.log('  thai-sarabun.docx  (Thai-primary, TH SarabunNew)');
+}
+
+// ============================================================================
+// 6. sample.md — GFM with h1, h2, table, code, bold, link + Thai
 // ============================================================================
 async function generateSampleMd() {
-  const filename = join(__dirname, 'sample.md');
-  if (existsSync(filename)) {
-    console.log('✓ sample.md exists');
-    return;
-  }
-
-  const content = `# Main Heading
+  const file = join(__dirname, 'sample.md');
+  writeFileSync(file, `# Main Heading
 
 ## Subheading
 
@@ -377,136 +266,113 @@ console.log(greeting);
 |----------|----------|
 | Value 1  | Value 2  |
 | Value 3  | Value 4  |
-`;
 
-  writeFileSync(filename, content, 'utf8');
-  console.log('✓ sample.md created (GFM with h1, h2, table, code, bold, link)');
+## \u0e2b\u0e31\u0e27\u0e02\u0e49\u0e2d\u0e20\u0e32\u0e29\u0e32\u0e44\u0e17\u0e22
+
+${ANCHOR_THAI}
+`, 'utf8');
+  console.log('  sample.md          (GFM + Thai section)');
 }
 
 // ============================================================================
-// 6. sample-bom.txt - UTF-8 BOM + CRLF + anchor sentence
+// 7. sample-bom.txt — UTF-8 BOM + CRLF + Latin + Thai anchors
 // ============================================================================
 async function generateSampleBomTxt() {
-  const filename = join(__dirname, 'sample-bom.txt');
-  if (existsSync(filename)) {
-    console.log('✓ sample-bom.txt exists');
-    return;
-  }
-
-  const bom = Buffer.from([0xef, 0xbb, 0xbf]); // UTF-8 BOM
-  const content = Buffer.from(`${ANCHOR_LATIN}\r\nSecond line with CRLF.\r\n`, 'utf8');
-  const buffer = Buffer.concat([bom, content]);
-
-  writeFileSync(filename, buffer);
-  console.log('✓ sample-bom.txt created (UTF-8 BOM + CRLF)');
+  const file = join(__dirname, 'sample-bom.txt');
+  const bom = Buffer.from([0xef, 0xbb, 0xbf]);
+  const content = Buffer.from(
+    `${ANCHOR_LATIN}\r\nSecond line with CRLF.\r\n${ANCHOR_THAI}\r\n`,
+    'utf8'
+  );
+  writeFileSync(file, Buffer.concat([bom, content]));
+  console.log('  sample-bom.txt     (BOM+CRLF, Latin+Thai)');
 }
 
 // ============================================================================
-// 7. thai-ocr.png - ≥600px wide image of Thai text
+// 8. thai-ocr.png — Thai text image, TH SarabunNew
 // ============================================================================
 async function generateThaiOcrPng() {
-  const filename = join(__dirname, 'thai-ocr.png');
-  if (existsSync(filename)) {
-    console.log('✓ thai-ocr.png exists');
-    return;
-  }
-
+  const file = join(__dirname, 'thai-ocr.png');
   const svg = `<svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
     <rect width="800" height="400" fill="white"/>
-    <text x="50" y="100" font-family="Tahoma, Leelawadee UI" font-size="24" fill="black">
-      ${ANCHOR_THAI}
-    </text>
-    <text x="50" y="150" font-family="Tahoma, Leelawadee UI" font-size="18" fill="black">
-      Line 2: ทดสอบระบบ
-    </text>
-    <text x="50" y="200" font-family="Tahoma, Leelawadee UI" font-size="18" fill="black">
-      Line 3: ค้นหาข้อความ
-    </text>
+    <text x="50" y="100" font-family="${FONT_SVG}" font-size="24" fill="black">${ANCHOR_THAI}</text>
+    <text x="50" y="160" font-family="${FONT_SVG}" font-size="20" fill="black">\u0e17\u0e14\u0e2a\u0e2d\u0e1a\u0e23\u0e30\u0e1a\u0e1a</text>
+    <text x="50" y="220" font-family="${FONT_SVG}" font-size="20" fill="black">\u0e04\u0e49\u0e19\u0e2b\u0e32\u0e02\u0e49\u0e2d\u0e04\u0e27\u0e32\u0e21</text>
   </svg>`;
-
   const png = await sharp(Buffer.from(svg)).png().toBuffer();
-  writeFileSync(filename, png);
-  console.log('✓ thai-ocr.png created (≥600px wide, Thai text)');
+  writeFileSync(file, png);
+  console.log('  thai-ocr.png       (TH SarabunNew, 800px)');
 }
 
 // ============================================================================
-// 8. latin-ocr.jpg - image of 3+ English text lines with anchor sentence
+// 9. latin-ocr.jpg — English + Thai text lines
 // ============================================================================
 async function generateLatinOcrJpg() {
-  const filename = join(__dirname, 'latin-ocr.jpg');
-  if (existsSync(filename)) {
-    console.log('✓ latin-ocr.jpg exists');
-    return;
-  }
-
-  const svg = `<svg width="800" height="300" xmlns="http://www.w3.org/2000/svg">
-    <rect width="800" height="300" fill="white"/>
-    <text x="50" y="80" font-family="Arial" font-size="18" fill="black">
-      ${ANCHOR_LATIN}
-    </text>
-    <text x="50" y="140" font-family="Arial" font-size="16" fill="black">
-      This is the second line of text in the image.
-    </text>
-    <text x="50" y="200" font-family="Arial" font-size="16" fill="black">
-      And here is the third line for OCR testing.
-    </text>
+  const file = join(__dirname, 'latin-ocr.jpg');
+  const svg = `<svg width="800" height="400" xmlns="http://www.w3.org/2000/svg">
+    <rect width="800" height="400" fill="white"/>
+    <text x="50" y="80"  font-family="${FONT_SVG}" font-size="18" fill="black">${ANCHOR_LATIN}</text>
+    <text x="50" y="140" font-family="${FONT_SVG}" font-size="16" fill="black">This is the second line of text in the image.</text>
+    <text x="50" y="200" font-family="${FONT_SVG}" font-size="16" fill="black">And here is the third line for OCR testing.</text>
+    <text x="50" y="280" font-family="${FONT_SVG}" font-size="20" fill="black">${ANCHOR_THAI}</text>
   </svg>`;
-
   const jpg = await sharp(Buffer.from(svg)).jpeg({ quality: 90 }).toBuffer();
-  writeFileSync(filename, jpg);
-  console.log('✓ latin-ocr.jpg created (3+ English text lines)');
+  writeFileSync(file, jpg);
+  console.log('  latin-ocr.jpg      (Latin+Thai, 800px)');
 }
 
 // ============================================================================
-// 9. corrupt.pdf - %PDF-1.4 header + truncated garbage
+// 10. corrupt.pdf — truncated/invalid (unchanged)
 // ============================================================================
-async function generateCorruptPdf() {
-  const filename = join(__dirname, 'corrupt.pdf');
-  if (existsSync(filename)) {
-    console.log('✓ corrupt.pdf exists');
-    return;
-  }
-
-  const corrupt = Buffer.from('%PDF-1.4\n%corrupted data\ntruncated\n', 'utf8');
-  writeFileSync(filename, corrupt);
-  console.log('✓ corrupt.pdf created (truncated, invalid)');
+function generateCorruptPdf() {
+  const file = join(__dirname, 'corrupt.pdf');
+  writeFileSync(file, Buffer.from('%PDF-1.4\n%corrupted data\ntruncated\n', 'utf8'));
+  console.log('  corrupt.pdf        (truncated, invalid)');
 }
 
 // ============================================================================
-// 10. oversized-marker.txt - small text file
+// 11. oversized-marker.txt (unchanged)
 // ============================================================================
-async function generateOversizedMarkerTxt() {
-  const filename = join(__dirname, 'oversized-marker.txt');
-  if (existsSync(filename)) {
-    console.log('✓ oversized-marker.txt exists');
-    return;
-  }
-
-  const content = 'This is a marker file for oversized content testing.\n';
-  writeFileSync(filename, content, 'utf8');
-  console.log('✓ oversized-marker.txt created');
+function generateOversizedMarkerTxt() {
+  const file = join(__dirname, 'oversized-marker.txt');
+  writeFileSync(file, 'This is a marker file for oversized content testing.\n', 'utf8');
+  console.log('  oversized-marker.txt');
 }
 
 // ============================================================================
-// Main execution
+// Main
 // ============================================================================
 async function main() {
   try {
+    // PDFs (need browser)
     await generateDigitalLatinPdf();
     await generateDigitalThaiPdf();
     await generateScannedPdf();
+
+    // Close browser after PDFs
+    if (_browser) { await _browser.close(); _browser = null; }
+
+    // DOCX
     await generateSimpleDocx();
+    await generateThaiSarabunDocx();
+
+    // Text & Markdown
     await generateSampleMd();
     await generateSampleBomTxt();
+
+    // Images
     await generateThaiOcrPng();
     await generateLatinOcrJpg();
-    await generateCorruptPdf();
-    await generateOversizedMarkerTxt();
 
-    console.log('\n✅ All fixtures generated successfully!');
+    // Unchanged
+    generateCorruptPdf();
+    generateOversizedMarkerTxt();
+
+    console.log('\nAll fixtures generated.');
     process.exit(0);
   } catch (error) {
-    console.error('\n❌ Error generating fixtures:', error.message);
+    if (_browser) { await _browser.close().catch(() => {}); }
+    console.error('\nError:', error.message);
     process.exit(1);
   }
 }
