@@ -7,7 +7,7 @@ const { MimeDetector } = require("./mime");
  * processed by the collector.
  */
 const documentsFolder =
-  process.env.NODE_ENV === "development"
+  process.env.NODE_ENV === "development" || !process.env.STORAGE_DIR
     ? path.resolve(__dirname, `../../../server/storage/documents`)
     : path.resolve(process.env.STORAGE_DIR, `documents`);
 
@@ -17,7 +17,7 @@ const documentsFolder =
  * and are not to be embedded or selectable from the file picker.
  */
 const directUploadsFolder =
-  process.env.NODE_ENV === "development"
+  process.env.NODE_ENV === "development" || !process.env.STORAGE_DIR
     ? path.resolve(__dirname, `../../../server/storage/direct-uploads`)
     : path.resolve(process.env.STORAGE_DIR, `direct-uploads`);
 
@@ -240,6 +240,95 @@ function sanitizeFileName(fileName) {
   );
 }
 
+/**
+ * Regex for UUID v4-shaped strings (8-4-4-4-12 hex).
+ */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Copy a source document's original file into `<documentsFolder>/originals/<sourceId><extension>`.
+ * Controlled by env flags PERSIST_SOURCE_DOCUMENTS (default "true") and MAX_SOURCE_DOCUMENT_SIZE_MB (default 100).
+ * @param {Object} params
+ * @param {string} params.fullFilePath - Absolute path to the source file.
+ * @param {string} params.sourceId - UUID-shaped identifier.
+ * @param {string} params.extension - File extension including leading dot (e.g. ".pdf").
+ * @returns {{ persisted: boolean, reason?: string }}
+ */
+function persistOriginalFile({ fullFilePath, sourceId, extension }) {
+  try {
+    // Check env flag — default ON when unset
+    if (process.env.PERSIST_SOURCE_DOCUMENTS === "false") {
+      return { persisted: false, reason: "persistence disabled by flag" };
+    }
+
+    // Validate sourceId
+    if (!sourceId || !UUID_RE.test(sourceId)) {
+      return { persisted: false, reason: "invalid sourceId" };
+    }
+
+    // Validate extension
+    if (!extension || typeof extension !== "string" || !extension.startsWith(".")) {
+      return { persisted: false, reason: "invalid extension" };
+    }
+
+    // Check source file exists
+    if (!fs.existsSync(fullFilePath)) {
+      return { persisted: false, reason: "source file missing" };
+    }
+
+    // Check file size cap
+    const maxBytes =
+      Number(process.env.MAX_SOURCE_DOCUMENT_SIZE_MB || 100) * 1024 * 1024;
+    const stats = fs.statSync(fullFilePath);
+    if (stats.size > maxBytes) {
+      return { persisted: false, reason: "file exceeds size cap" };
+    }
+
+    // Lazy resolution — never depends on module-scope constant that may
+    // have fallen back when STORAGE_DIR was absent at load time.
+    const docsFolder = process.env.STORAGE_DIR
+      ? path.resolve(process.env.STORAGE_DIR, "documents")
+      : path.resolve(__dirname, "../../../server/storage/documents");
+    const destDir = path.resolve(docsFolder, "originals");
+    fs.mkdirSync(destDir, { recursive: true });
+
+    const destPath = path.resolve(destDir, `${sourceId}${extension}`);
+    fs.copyFileSync(fullFilePath, destPath);
+    return { persisted: true };
+  } catch (err) {
+    console.error(`persistOriginalFile error: ${err.message}`);
+    return { persisted: false, reason: err.message };
+  }
+}
+
+/**
+ * Write an OCR sidecar JSON file to `<documentsFolder>/ocr/<sourceId>.json`.
+ * @param {Object} params
+ * @param {string} params.sourceId - UUID-shaped identifier.
+ * @param {*} params.payload - Serializable payload.
+ * @returns {{ written: boolean, reason?: string }}
+ */
+function writeOcrSidecar({ sourceId, payload }) {
+  try {
+    if (!sourceId || !UUID_RE.test(sourceId)) {
+      return { written: false, reason: "invalid sourceId" };
+    }
+
+    const docsFolder = process.env.STORAGE_DIR
+      ? path.resolve(process.env.STORAGE_DIR, "documents")
+      : path.resolve(__dirname, "../../../server/storage/documents");
+    const destDir = path.resolve(docsFolder, "ocr");
+    fs.mkdirSync(destDir, { recursive: true });
+
+    const destPath = path.resolve(destDir, `${sourceId}.json`);
+    fs.writeFileSync(destPath, JSON.stringify(payload), { encoding: "utf-8" });
+    return { written: true };
+  } catch (err) {
+    console.error(`writeOcrSidecar error: ${err.message}`);
+    return { written: false, reason: err.message };
+  }
+}
+
 module.exports = {
   trashFile,
   isTextType,
@@ -251,4 +340,6 @@ module.exports = {
   sanitizeFileName,
   documentsFolder,
   directUploadsFolder,
+  persistOriginalFile,
+  writeOcrSidecar,
 };

@@ -1,0 +1,2 @@
+﻿The quick brown fox anchors here.
+Second line with CRLF.

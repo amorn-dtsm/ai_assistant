@@ -169,17 +169,32 @@ class OCRLoader {
               const page = await pdfDocument.getPage(pageNum);
               const imageBuffer = await pdfSharp.pageToBuffer({ page });
               if (!imageBuffer) continue;
-              const { data } = await worker.recognize(imageBuffer, {}, "text");
+              const { data } = await worker.recognize(imageBuffer, {}, { text: true, blocks: true });
               this.log(
                 `✅ \x1b[34m[Worker ${
                   workerIndex + 1
                 }]\x1b[0m completed pg${pageNum}`
               );
+
+              // Build per-page OCR geometry (best-effort)
+              let pageOcr = null;
+              try {
+                const sharpMod = pdfSharp.sharp || (await import("sharp")).default;
+                const pageMeta = await sharpMod(imageBuffer).metadata();
+                const lines = OCRLoader.extractLines(data.blocks ?? null);
+                if (pageMeta.width != null && pageMeta.height != null && lines.length > 0) {
+                  pageOcr = { width: pageMeta.width, height: pageMeta.height, lines };
+                }
+              } catch (_dimErr) {
+                // Non-fatal: geometry unavailable for this page
+              }
+
               results.push({
                 pageContent: data.text,
                 metadata: {
                   ...metadata,
                   loc: { pageNumber: pageNum },
+                  ...(pageOcr ? { ocr: pageOcr } : {}),
                 },
               });
             }
@@ -212,14 +227,37 @@ class OCRLoader {
   }
 
   /**
-   * Loads an image file and returns the OCRed text.
+   * Extracts line-level geometry from tesseract blocks output.
+   * @param {Array|null} blocks - The blocks array from tesseract recognize.
+   * @returns {Array<{text: string, bbox: {x0: number, y0: number, x1: number, y1: number}}>}
+   */
+  static extractLines(blocks) {
+    if (!Array.isArray(blocks)) return [];
+    const lines = [];
+    for (const block of blocks) {
+      if (!block?.paragraphs) continue;
+      for (const para of block.paragraphs) {
+        if (!para?.lines) continue;
+        for (const line of para.lines) {
+          if (line?.text && line?.bbox) {
+            lines.push({ text: line.text, bbox: line.bbox });
+          }
+        }
+      }
+    }
+    return lines;
+  }
+
+  /**
+   * Loads an image file and returns the OCRed text with optional geometry.
    * @param {string} filePath - The path to the image file.
    * @param {Object} options - The options for the OCR.
    * @param {number} options.maxExecutionTime - The maximum execution time of the OCR in milliseconds.
-   * @returns {Promise<string>} The OCRed text.
+   * @returns {Promise<{text: string, geometry: {width: number, height: number, lines: Array} | null} | null>} The OCR result with geometry, or null on error.
    */
   async ocrImage(filePath, { maxExecutionTime = 300_000 } = {}) {
     let content = "";
+    let geometry = null;
     let worker = null;
     if (
       !filePath ||
@@ -239,6 +277,18 @@ class OCRLoader {
         cachePath: this.cacheDir,
       });
 
+      // Capture image dimensions via sharp (best-effort)
+      let imgWidth = null;
+      let imgHeight = null;
+      try {
+        const sharp = (await import("sharp")).default;
+        const meta = await sharp(filePath).metadata();
+        imgWidth = meta.width ?? null;
+        imgHeight = meta.height ?? null;
+      } catch (dimErr) {
+        this.log(`Could not read image dimensions: ${dimErr.message}`);
+      }
+
       // Race the timeout with the OCR
       const timeoutPromise = new Promise((_, reject) => {
         setTimeout(() => {
@@ -252,17 +302,26 @@ class OCRLoader {
         }, maxExecutionTime);
       });
 
+      let ocrBlocks = null;
       const processImage = async () => {
-        const { data } = await worker.recognize(filePath, {}, "text");
+        const { data } = await worker.recognize(filePath, {}, { text: true, blocks: true });
         content = data.text;
+        ocrBlocks = data.blocks ?? null;
       };
 
       await Promise.race([timeoutPromise, processImage()]);
+
+      // Build geometry from dims + lines
+      const lines = OCRLoader.extractLines(ocrBlocks);
+      if (imgWidth != null && imgHeight != null && lines.length > 0) {
+        geometry = { width: imgWidth, height: imgHeight, lines };
+      }
+
       this.log(`Completed OCR of ${documentTitle}!`, {
         executionTime: `${((Date.now() - startTime) / 1000).toFixed(2)}s`,
       });
 
-      return content;
+      return { text: content, geometry };
     } catch (e) {
       this.log(`Error: ${e.message}`);
       return null;

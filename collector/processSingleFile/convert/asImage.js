@@ -14,9 +14,10 @@ async function asImage({
   options = {},
   metadata = {},
 }) {
-  let content = await new OCRLoader({
+  const ocrResult = await new OCRLoader({
     targetLanguages: options?.ocr?.langList,
   }).ocrImage(fullFilePath);
+  let content = ocrResult?.text ?? null;
 
   if (!content?.length) {
     console.error(`Resulting text content was empty for ${filename}.`);
