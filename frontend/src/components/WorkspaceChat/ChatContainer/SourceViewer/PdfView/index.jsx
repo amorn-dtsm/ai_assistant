@@ -367,13 +367,8 @@ export default function PdfView({
   };
 
   // ── Render ─────────────────────────────────────────────────────────
-  if (error) {
-    return (
-      <div className="flex items-center justify-center h-full text-red-400 p-4">
-        <p>Failed to load PDF: {error}</p>
-      </div>
-    );
-  }
+  // Throw in render phase so the ErrorBoundary catches it
+  if (error) throw new Error(error);
 
   return (
     <div

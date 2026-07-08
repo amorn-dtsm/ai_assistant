@@ -20,6 +20,7 @@ export default function ImageView({
   const [sidecar, setSidecar] = useState(null);
   const [imgDims, setImgDims] = useState(null);
   const [overlayRects, setOverlayRects] = useState([]);
+  const [loadError, setLoadError] = useState(null);
 
   const imgRef = useRef(null);
   const containerRef = useRef(null);
@@ -31,14 +32,18 @@ export default function ImageView({
     let cancelled = false;
 
     async function load() {
-      const url = DocumentSource.fileUrl(workspaceSlug, sourceId);
-      const res = await fetch(url, { headers: baseHeaders() });
-      if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`);
-      const blob = await res.blob();
-      if (cancelled) return;
-      const objectUrl = URL.createObjectURL(blob);
-      revoke = objectUrl;
-      setBlobUrl(objectUrl);
+      try {
+        const url = DocumentSource.fileUrl(workspaceSlug, sourceId);
+        const res = await fetch(url, { headers: baseHeaders() });
+        if (!res.ok) throw new Error(`Image fetch failed: ${res.status}`);
+        const blob = await res.blob();
+        if (cancelled) return;
+        const objectUrl = URL.createObjectURL(blob);
+        revoke = objectUrl;
+        setBlobUrl(objectUrl);
+      } catch (e) {
+        if (!cancelled) setLoadError(e);
+      }
     }
 
     load();
@@ -130,6 +135,9 @@ export default function ImageView({
       firstOverlay.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }, [overlayRects]);
+
+  // Throw in render phase so the ErrorBoundary catches it
+  if (loadError) throw loadError;
 
   if (!blobUrl) {
     return (
