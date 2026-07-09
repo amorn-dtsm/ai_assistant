@@ -11,12 +11,7 @@ import "react-pdf/dist/Page/AnnotationLayer.css";
 
 import { baseHeaders } from "@/utils/request";
 import documentSource from "@/models/documentSource";
-import {
-  buildPageText,
-  findChunkInDocument,
-  mapRawToSpans,
-  findChunkInOcr,
-} from "./anchor.js";
+import { buildPageText, findChunkInDocument, mapRawToSpans } from "./anchor.js";
 import {
   prepareSearchKey,
   THAI_RANGE,
@@ -177,7 +172,7 @@ export default function PdfView({
     [chunkText]
   );
 
-  // ── OCR fallback ──────────────────────────────────────────────────
+  // ── OCR fallback (document-level, cross-page) ──────────────────────
   const anchorViaOcr = useCallback(
     async (_pdf) => {
       try {
@@ -190,23 +185,65 @@ export default function PdfView({
           return;
         }
 
-        const hit = findChunkInOcr(ocrData.pages, chunkText);
-        if (!hit) {
+        // Build pages[] for findChunkInDocument from sidecar data.
+        // rawText = lines joined with "" — line texts already include
+        // trailing "\n" so no separator is needed.
+        // Record per-line char spans for later segment→bbox mapping.
+        const docPages = [];
+        const pageLineSpans = {};
+
+        for (const ocrPage of ocrData.pages) {
+          let rawText = "";
+          const lineSpans = [];
+          for (let li = 0; li < ocrPage.lines.length; li++) {
+            const start = rawText.length;
+            rawText += ocrPage.lines[li].text;
+            lineSpans.push({
+              lineIdx: li,
+              start,
+              end: rawText.length,
+              bbox: ocrPage.lines[li].bbox,
+            });
+          }
+          docPages.push({ pageNumber: ocrPage.pageNumber, rawText });
+          pageLineSpans[ocrPage.pageNumber] = lineSpans;
+        }
+
+        const needle = prepareSearchKey(chunkText);
+        if (!needle.norm.trim()) {
           setTargetPage(1);
           onMatchQuality?.("none");
           return;
         }
 
-        const hitPageNum = hit.pageIndex + 1;
-        setTargetPage(hitPageNum);
-        onMatchQuality?.(hit.quality);
-
-        // Wait for page to render, then place bbox overlays
-        requestAnimationFrame(() => {
-          if (cancelledRef.current) return;
-          const ocrPage = ocrData.pages[hit.pageIndex];
-          placeOcrHighlights(hitPageNum, hit.bboxes, ocrPage);
+        const docHit = findChunkInDocument(docPages, needle.norm, {
+          thai: THAI_RANGE.test(needle.norm),
         });
+
+        if (!docHit) {
+          setTargetPage(1);
+          setHitPageNums([]);
+          onMatchQuality?.("none");
+          return;
+        }
+
+        const segPages = docHit.segments.map((s) => s.pageNumber);
+        setTargetPage(segPages[0]);
+        setHitPageNums(segPages);
+
+        const shouldPaint =
+          docHit.quality === "exact" ||
+          (docHit.quality === "fuzzy" && docHit.score >= FUZZY_PAINT_THRESHOLD);
+
+        onMatchQuality?.(docHit.quality === "exact" ? "exact" : "approximate");
+
+        if (shouldPaint) {
+          // Map segments → sidecar line bboxes → overlays across hit pages
+          requestAnimationFrame(() => {
+            if (cancelledRef.current) return;
+            placeOcrDocHighlights(docHit.segments, pageLineSpans);
+          });
+        }
       } catch (err) {
         if (!cancelledRef.current) {
           console.error("[PdfView] OCR fallback error:", err);
@@ -320,48 +357,68 @@ export default function PdfView({
     tryPlace();
   }, []);
 
-  // ── Highlight placement (OCR) ──────────────────────────────────────
-  const placeOcrHighlights = useCallback((pageNum, bboxes, _ocrPage) => {
+  // ── Highlight placement (OCR, multi-page via findChunkInDocument) ──
+  const placeOcrDocHighlights = useCallback((segments, pageLineSpans) => {
     let attempts = 0;
     const maxAttempts = 20;
+    const placed = {};
 
     const tryPlace = () => {
       if (cancelledRef.current) return;
       attempts++;
+      let anyPending = false;
 
-      const pageEl = pageContainerRefs.current[pageNum];
-      if (!pageEl) {
-        if (attempts < maxAttempts) setTimeout(tryPlace, 100);
+      for (const seg of segments) {
+        if (placed[seg.pageNumber]) continue;
+
+        const pageEl = pageContainerRefs.current[seg.pageNumber];
+        if (!pageEl) {
+          anyPending = true;
+          continue;
+        }
+
+        const canvas = pageEl.querySelector("canvas");
+        if (!canvas) {
+          anyPending = true;
+          continue;
+        }
+
+        const renderedW = canvas.clientWidth;
+        const renderedH = canvas.clientHeight;
+        const lineSpans = pageLineSpans[seg.pageNumber] || [];
+
+        // Collect bboxes of lines whose char span intersects [rawStart, rawEnd)
+        const bboxes = [];
+        for (const ls of lineSpans) {
+          if (ls.end > seg.rawStart && ls.start < seg.rawEnd) {
+            bboxes.push(ls.bbox);
+          }
+        }
+
+        // Convert normalized [0..1] bboxes → pixel overlays
+        placed[seg.pageNumber] = bboxes.map(([x0, y0, x1, y1]) => ({
+          top: y0 * renderedH,
+          left: x0 * renderedW,
+          width: (x1 - x0) * renderedW,
+          height: (y1 - y0) * renderedH,
+        }));
+      }
+
+      if (anyPending && attempts < maxAttempts) {
+        setTimeout(tryPlace, 100);
         return;
       }
 
-      const canvas = pageEl.querySelector("canvas");
-      if (!canvas) {
-        if (attempts < maxAttempts) setTimeout(tryPlace, 100);
-        return;
-      }
+      setOverlays({ ...placed });
 
-      const renderedW = canvas.clientWidth;
-      const renderedH = canvas.clientHeight;
-
-      // OCR bboxes are normalized 0..1, top-left origin: [x0, y0, x1, y1]
-      const newOverlays = bboxes.map(([x0, y0, x1, y1]) => ({
-        top: y0 * renderedH,
-        left: x0 * renderedW,
-        width: (x1 - x0) * renderedW,
-        height: (y1 - y0) * renderedH,
-      }));
-
-      setOverlays({ [pageNum]: newOverlays });
-
-      if (newOverlays.length > 0) {
+      // Scroll first segment's overlay into view
+      const firstPage = segments[0]?.pageNumber;
+      if (firstPage && placed[firstPage]?.length > 0) {
         requestAnimationFrame(() => {
-          const firstOverlayEl = pageEl.querySelector(
+          const firstEl = pageContainerRefs.current[firstPage]?.querySelector(
             '[data-testid="highlight-overlay"]'
           );
-          if (firstOverlayEl) {
-            firstOverlayEl.scrollIntoView({ block: "center" });
-          }
+          if (firstEl) firstEl.scrollIntoView({ block: "center" });
         });
       }
     };
