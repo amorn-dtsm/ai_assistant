@@ -8,7 +8,7 @@ const ReflowView = React.lazy(() => import("./ReflowView"));
 function LoadingSpinner() {
   return (
     <div className="flex items-center justify-center h-full w-full">
-      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white light:border-slate-900" />
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white light:border-slate-900 green:border-[#171717]" />
     </div>
   );
 }
@@ -38,7 +38,7 @@ class SourceViewerErrorBoundary extends React.Component {
           data-testid="source-viewer-error"
           className="flex items-center justify-center h-full w-full p-8"
         >
-          <p className="text-white/60 light:text-slate-500 text-sm text-center">
+          <p className="text-white/60 light:text-slate-500 green:text-[#71717A] text-sm text-center">
             Source file no longer available
           </p>
         </div>
@@ -114,16 +114,16 @@ export default function SourceViewer({
         />
         <div
           data-testid="source-viewer"
-          className="fixed top-0 right-0 z-[901] bg-zinc-900 light:bg-white border-l border-zinc-700 light:border-slate-300 flex flex-col w-full h-full md:w-[65vw]"
+          className="fixed top-0 right-0 z-[901] bg-zinc-900 light:bg-white green:bg-white border-l border-zinc-700 light:border-slate-300 green:border-[#DEDEE0] flex flex-col w-full h-full md:w-[65vw]"
         >
-          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 light:border-slate-300 flex-shrink-0">
-            <h3 className="text-sm font-semibold text-white light:text-slate-900 truncate">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 light:border-slate-300 green:border-[#DEDEE0] flex-shrink-0">
+            <h3 className="text-sm font-semibold text-white light:text-slate-900 green:text-[#171717] truncate">
               {source?.title || "Source"}
             </h3>
             <button
               onClick={onClose}
               type="button"
-              className="text-white/60 light:text-slate-400 hover:text-white light:hover:text-slate-900 transition-colors"
+              className="text-white/60 light:text-slate-400 green:text-[#71717A] hover:text-white light:hover:text-slate-900 green:hover:text-[#171717] transition-colors"
             >
               <X size={20} weight="bold" />
             </button>
@@ -152,18 +152,18 @@ export default function SourceViewer({
       {/* Panel — mobile: full-screen, desktop: right-side 65vw */}
       <div
         data-testid="source-viewer"
-        className="fixed top-0 right-0 z-[901] bg-zinc-900 light:bg-white border-l border-zinc-700 light:border-slate-300 flex flex-col w-full h-full md:w-[65vw]"
+        className="fixed top-0 right-0 z-[901] bg-zinc-900 light:bg-white green:bg-white border-l border-zinc-700 light:border-slate-300 green:border-[#DEDEE0] flex flex-col w-full h-full md:w-[65vw]"
       >
         {/* Title bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 light:border-slate-300 flex-shrink-0">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 light:border-slate-300 green:border-[#DEDEE0] flex-shrink-0">
           <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-            <h3 className="text-sm font-semibold text-white light:text-slate-900 truncate">
+            <h3 className="text-sm font-semibold text-white light:text-slate-900 green:text-[#171717] truncate">
               {source?.title || "Source"}
             </h3>
             {(matchQuality === "approximate" || matchQuality === "none") && (
               <span
                 data-testid="match-approximate"
-                className="flex-shrink-0 px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 light:bg-yellow-100 light:text-yellow-700 text-xs whitespace-nowrap"
+                className="flex-shrink-0 px-2 py-0.5 rounded-full bg-yellow-500/20 text-yellow-300 light:bg-yellow-100 light:text-yellow-700 green:bg-yellow-100 green:text-yellow-700 text-xs whitespace-nowrap"
               >
                 approximate location
               </span>
@@ -172,7 +172,7 @@ export default function SourceViewer({
           <button
             onClick={onClose}
             type="button"
-            className="flex-shrink-0 text-white/60 light:text-slate-400 hover:text-white light:hover:text-slate-900 transition-colors"
+            className="flex-shrink-0 text-white/60 light:text-slate-400 green:text-[#71717A] hover:text-white light:hover:text-slate-900 green:hover:text-[#171717] transition-colors"
           >
             <X size={20} weight="bold" />
           </button>

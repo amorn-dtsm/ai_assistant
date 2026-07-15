@@ -49,7 +49,7 @@ export default function SettingsSidebar() {
   if (isMobile) {
     return (
       <>
-        <div className="fixed top-0 left-0 right-0 z-10 flex justify-between items-center px-4 py-2 bg-theme-bg-sidebar light:bg-white text-theme-text-secondary shadow-lg h-16">
+        <div className="fixed top-0 left-0 right-0 z-10 flex justify-between items-center px-4 py-2 bg-theme-bg-sidebar light:bg-white green:bg-[#025029] text-theme-text-secondary shadow-lg h-16">
           <button
             onClick={() => setShowSidebar(true)}
             className="rounded-md p-2 flex items-center justify-center text-theme-text-secondary"
@@ -151,7 +151,7 @@ export default function SettingsSidebar() {
         </Link>
         <div
           ref={sidebarRef}
-          className="transition-all duration-500 relative m-[16px] rounded-[16px] bg-theme-bg-sidebar border-[2px] border-theme-sidebar-border light:border-none min-w-[250px] p-[10px] h-[calc(100%-76px)]"
+          className="transition-all duration-500 relative m-[16px] rounded-[16px] bg-theme-bg-sidebar border-[2px] border-theme-sidebar-border light:border-none green:border-none min-w-[250px] p-[10px] h-[calc(100%-76px)]"
         >
           <div className="w-full h-full flex flex-col overflow-x-hidden items-between min-w-[235px]">
             <div className="text-theme-text-secondary text-sm font-medium uppercase mt-[4px] mb-0 ml-2">
@@ -168,7 +168,7 @@ export default function SettingsSidebar() {
                       user?.hasOwnProperty("role") && user.role !== "admin"
                     }
                     to={paths.settings.privacy()}
-                    className="text-theme-text-secondary hover:text-white hover:light:text-theme-text-primary text-xs leading-[18px] mx-3"
+                    className="text-theme-text-secondary hover:text-white hover:light:text-theme-text-primary hover:green:text-white text-xs leading-[18px] mx-3"
                   >
                     {t("settings.privacy")}
                   </Link>
@@ -205,7 +205,7 @@ function SupportEmail() {
   return (
     <Link
       to={supportEmail}
-      className="text-theme-text-secondary hover:text-white hover:light:text-theme-text-primary text-xs leading-[18px] mx-3 mt-1"
+      className="text-theme-text-secondary hover:text-white hover:light:text-theme-text-primary hover:green:text-white text-xs leading-[18px] mx-3 mt-1"
     >
       {t("settings.contact")}
     </Link>
@@ -306,7 +306,7 @@ const SidebarOptions = ({ user = null, t }) => (
             <img
               src={AgentIcon}
               alt="Agent"
-              className="h-5 w-5 flex-shrink-0 light:invert"
+              className="h-5 w-5 flex-shrink-0 light:invert green:invert-0"
             />
           }
           href={paths.settings.agentSkills()}
@@ -320,7 +320,7 @@ const SidebarOptions = ({ user = null, t }) => (
             <img
               src={CommunityHubIcon}
               alt="Community Hub"
-              className="h-5 w-5 flex-shrink-0 light:invert"
+              className="h-5 w-5 flex-shrink-0 light:invert green:invert-0"
             />
           }
           user={user}
@@ -514,7 +514,7 @@ function AppVersion() {
       to={`https://github.com/Mintplex-Labs/anything-llm/releases/tag/v${version}`}
       target="_blank"
       rel="noreferrer"
-      className="text-theme-text-secondary light:opacity-80 opacity-50 text-xs mx-3"
+      className="text-theme-text-secondary light:opacity-80 green:text-[#B1D3C2] green:opacity-80 opacity-50 text-xs mx-3"
     >
       v{version}
     </Link>

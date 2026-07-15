@@ -124,7 +124,7 @@ export default function ActiveWorkspaces() {
                             transition-all duration-[200ms]
                             flex flex-grow w-[75%] gap-x-2 py-[6px] pl-[4px] pr-[6px] rounded-[4px] text-white justify-start items-center
                             bg-theme-sidebar-item-default
-                            ${isActive ? "light:bg-blue-200 font-bold" : "hover:bg-theme-sidebar-subitem-hover light:hover:bg-slate-300"}
+                            ${isActive ? "light:bg-blue-200 green:bg-[#036735] font-bold" : "hover:bg-theme-sidebar-subitem-hover light:hover:bg-slate-300 green:hover:bg-[#036735]"}
                           `}
                         >
                           <div className="flex flex-row justify-between w-full items-center">
@@ -134,7 +134,7 @@ export default function ActiveWorkspaces() {
                             >
                               <DotsSixVertical
                                 size={20}
-                                className={`${isActive ? "text-white light:text-blue-800" : ""}`}
+                                className={`${isActive ? "text-white light:text-blue-800 green:text-white" : ""}`}
                                 weight="bold"
                               />
                             </div>
@@ -147,7 +147,7 @@ export default function ActiveWorkspaces() {
                                 <p
                                   className={`
                                   text-[14px] leading-loose whitespace-nowrap overflow-hidden
-                                  ${isActive ? "font-bold text-white light:text-blue-900" : "font-medium "} truncate
+                                  ${isActive ? "font-bold text-white light:text-blue-900 green:text-white" : "font-medium "} truncate
                                   w-full group-hover:w-[130px] group-hover:duration-200
                                 `}
                                 >
@@ -168,10 +168,10 @@ export default function ActiveWorkspaces() {
                                   }}
                                   data-tooltip-id="upload-workspace"
                                   data-tooltip-content="Upload documents to this workspace for RAG indexing"
-                                  className={`group/upload border-none rounded-md flex items-center justify-center ml-auto p-[2px] ${isActive ? "hover:bg-zinc-500 light:hover:bg-sky-800/30" : "hover:bg-zinc-500 light:hover:bg-slate-400"}`}
+                                  className={`group/upload border-none rounded-md flex items-center justify-center ml-auto p-[2px] ${isActive ? "hover:bg-zinc-500 light:hover:bg-sky-800/30 green:hover:bg-[#036735]" : "hover:bg-zinc-500 light:hover:bg-slate-400 green:hover:bg-[#036735]"}`}
                                 >
                                   <UploadSimple
-                                    className={`h-[20px] w-[20px] ${isActive ? "text-zinc-400 hover:text-white light:text-blue-700 light:group-hover/upload:text-blue-900" : "text-zinc-400 hover:text-white light:text-slate-600 light:group-hover/upload:text-slate-950"}`}
+                                    className={`h-[20px] w-[20px] ${isActive ? "text-zinc-400 hover:text-white light:text-blue-700 light:group-hover/upload:text-blue-900 green:text-[#B1D3C2] green:group-hover/upload:text-white" : "text-zinc-400 hover:text-white light:text-slate-600 light:group-hover/upload:text-slate-950 green:text-[#B1D3C2] green:group-hover/upload:text-white"}`}
                                   />
                                 </button>
                                 <button
@@ -186,7 +186,7 @@ export default function ActiveWorkspaces() {
                                           )
                                     );
                                   }}
-                                  className={`group/gear rounded-md flex items-center justify-center ml-auto p-[2px] ${isActive ? "hover:bg-zinc-500 light:hover:bg-sky-800/30" : "hover:bg-zinc-500 light:hover:bg-slate-400"}`}
+                                  className={`group/gear rounded-md flex items-center justify-center ml-auto p-[2px] ${isActive ? "hover:bg-zinc-500 light:hover:bg-sky-800/30 green:hover:bg-[#036735]" : "hover:bg-zinc-500 light:hover:bg-slate-400 green:hover:bg-[#036735]"}`}
                                   aria-label="General appearance settings"
                                   data-tooltip-id="gear-workspace"
                                   data-tooltip-content="General appearance settings"
@@ -198,7 +198,7 @@ export default function ActiveWorkspaces() {
                                         ? "#46C8FF"
                                         : undefined
                                     }
-                                    className={`h-[20px] w-[20px] ${isActive ? "text-zinc-400 hover:text-white light:text-blue-700 light:group-hover/gear:text-blue-900" : "text-zinc-400 hover:text-white light:text-slate-600 light:group-hover/gear:text-slate-950"}`}
+                                    className={`h-[20px] w-[20px] ${isActive ? "text-zinc-400 hover:text-white light:text-blue-700 light:group-hover/gear:text-blue-900 green:text-[#B1D3C2] green:group-hover/gear:text-white" : "text-zinc-400 hover:text-white light:text-slate-600 light:group-hover/gear:text-slate-950 green:text-[#B1D3C2] green:group-hover/gear:text-white"}`}
                                   />
                                 </button>
                               </div>

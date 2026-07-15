@@ -102,7 +102,7 @@ const HistoricalMessage = ({
         className={`${isDeleted ? "animate-remove" : ""} flex justify-end w-full group`}
       >
         <div className="py-4 px-4 flex flex-col items-end">
-          <div className="bg-zinc-800 light:bg-slate-100 rounded-[20px] rounded-br-none px-4 py-3.5 max-w-[600px] [&_p]:m-0">
+          <div className="bg-zinc-800 light:bg-slate-100 green:bg-[#DDE9DF] rounded-[20px] rounded-br-none px-4 py-3.5 max-w-[600px] [&_p]:m-0">
             <TruncatableContent>
               <RenderChatContent
                 role={role}
@@ -269,7 +269,7 @@ function TruncatableContent({ children }) {
         {showTruncation && (
           <>
             <div
-              className="absolute bottom-0 left-0 right-0 h-[36px] light:hidden pointer-events-none"
+              className="absolute bottom-0 left-0 right-0 h-[36px] light:hidden green:hidden pointer-events-none"
               style={{
                 background:
                   "linear-gradient(180deg, rgba(39, 39, 42, 0.00) 0%, rgba(39, 39, 42, 0.65) 50%, #27272A 100%)",
@@ -282,13 +282,20 @@ function TruncatableContent({ children }) {
                   "linear-gradient(180deg, rgba(241, 245, 249, 0.00) 0%, rgba(241, 245, 249, 0.65) 50%, #F1F5F9 100%)",
               }}
             />
+            <div
+              className="absolute bottom-0 left-0 right-0 h-[36px] hidden green:block pointer-events-none"
+              style={{
+                background:
+                  "linear-gradient(180deg, rgba(255, 255, 255, 0.00) 0%, rgba(255, 255, 255, 0.65) 50%, #FFFFFF 100%)",
+              }}
+            />
           </>
         )}
       </div>
       {isOverflowing && (
         <button
           onClick={() => setIsExpanded(!isExpanded)}
-          className="text-zinc-300 light:text-slate-700 hover:text-white light:hover:text-slate-900 text-xs font-medium leading-4 mt-2"
+          className="text-zinc-300 light:text-slate-700 green:text-[#71717A] hover:text-white light:hover:text-slate-900 green:hover:text-[#171717] text-xs font-medium leading-4 mt-2"
         >
           {isExpanded ? t("chat_window.see_less") : t("chat_window.see_more")}
         </button>
@@ -304,7 +311,7 @@ const RenderChatContent = memo(
     if (role !== "assistant")
       return (
         <span
-          className="flex flex-col gap-y-1 text-white light:text-slate-900"
+          className="flex flex-col gap-y-1 text-white light:text-slate-900 green:text-[#171717]"
           dangerouslySetInnerHTML={{
             __html: DOMPurify.sanitize(renderMarkdown(message)),
           }}
@@ -338,7 +345,7 @@ const RenderChatContent = memo(
           <ThoughtChainComponent content={thoughtChain} messageId={messageId} />
         )}
         <span
-          className="flex flex-col gap-y-1 text-white light:text-slate-900"
+          className="flex flex-col gap-y-1 text-white light:text-slate-900 green:text-[#171717]"
           dangerouslySetInnerHTML={{
             __html: DOMPurify.sanitize(renderMarkdown(msgToRender)),
           }}

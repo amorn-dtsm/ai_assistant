@@ -10,10 +10,10 @@ export default function OnboardingHome() {
   const { t } = useTranslation();
 
   return (
-    <div className="relative w-screen h-screen flex flex-col overflow-hidden bg-zinc-950 light:bg-slate-50">
+    <div className="relative w-screen h-screen flex flex-col overflow-hidden bg-zinc-950 light:bg-slate-50 green:bg-white">
       {/* Dark mode background gradient */}
       <div
-        className="absolute inset-0 light:hidden"
+        className="absolute inset-0 light:hidden green:hidden"
         style={{
           background:
             "radial-gradient(ellipse 160% 100% at 50% 0%, rgba(130, 152, 178, 0.45) 0%, rgba(60, 87, 105, 0.25) 45%, transparent 90%)",
@@ -21,7 +21,7 @@ export default function OnboardingHome() {
       />
       {/* Light mode background gradient */}
       <div
-        className="absolute inset-0 hidden light:block"
+        className="absolute inset-0 hidden light:block green:block"
         style={{
           background:
             "radial-gradient(ellipse 160% 100% at 50% 0%, rgba(176, 200, 224, 0.7) 0%, rgba(195, 213, 230, 0.45) 50%, transparent 90%)",
@@ -29,7 +29,7 @@ export default function OnboardingHome() {
       />
 
       <div className="relative z-10 flex justify-center pt-[58px]">
-        <p className="text-white/80 light:text-slate-600 text-3xl font-semibold">
+        <p className="text-white/80 light:text-slate-600 green:text-[#71717A] text-3xl font-semibold">
           AnythingLLM
         </p>
       </div>
@@ -39,14 +39,14 @@ export default function OnboardingHome() {
           <OnboardingLogoSVG />
         </div>
 
-        <h1 className="relative font-medium text-white light:text-slate-700 text-[64px] md:text-[96px] lg:text-[160px] leading-none tracking-[-0.06em] select-none">
+        <h1 className="relative font-medium text-white light:text-slate-700 green:text-[#171717] text-[64px] md:text-[96px] lg:text-[160px] leading-none tracking-[-0.06em] select-none">
           {t("onboarding.home.welcome")}
         </h1>
 
         <button
           type="button"
           onClick={() => navigate(paths.onboarding.llmPreference())}
-          className="relative border-none z-10 h-[36px] w-[300px] py-2.5 px-5 rounded-lg bg-slate-50 hover:bg-slate-300 font-medium text-sm mt-[42px] text-zinc-900 light:text-white light:bg-slate-900 light:hover:bg-slate-800 text-center flex justify-center items-center transition-colors duration-200"
+          className="relative border-none z-10 h-[36px] w-[300px] py-2.5 px-5 rounded-lg bg-slate-50 hover:bg-slate-300 font-medium text-sm mt-[42px] text-zinc-900 light:text-white light:bg-slate-900 light:hover:bg-slate-800 green:text-white green:bg-[#03713A] green:hover:bg-[#036735] text-center flex justify-center items-center transition-colors duration-200"
         >
           {t("onboarding.home.getStarted")}
         </button>
