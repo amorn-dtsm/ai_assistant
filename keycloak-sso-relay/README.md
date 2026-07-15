@@ -68,12 +68,18 @@ In your realm (examples assume realm `anythingllm`):
 
 ### Docker Compose (includes a dev Keycloak)
 
+> **Do NOT put relay variables in `docker/.env`!** AnythingLLM rewrites that
+> file whenever settings are saved (e.g. enabling multi-user mode) and strips
+> all keys it does not recognize - your relay config would silently vanish.
+> Keep them in a separate `docker/.env.relay` file instead.
+
 ```powershell
 cd docker
-# .env must contain SIMPLE_SSO_ENABLED=1 etc. (step 1) plus:
-#   ANYTHINGLLM_API_KEY=<your developer API key>
-#   KEYCLOAK_CLIENT_SECRET=<client secret from Keycloak>
-docker compose -f docker-compose.yml -f docker-compose.keycloak.yml up -d --build
+# docker/.env        -> SIMPLE_SSO_ENABLED=1 etc. (step 1)
+# docker/.env.relay  -> ANYTHINGLLM_API_KEY=<developer API key>
+#                       KEYCLOAK_CLIENT_SECRET=<client secret from Keycloak>
+#                       (plus any KEYCLOAK_*/RELAY_* overrides)
+docker compose -f docker-compose.yml -f docker-compose.keycloak.yml --env-file .env --env-file .env.relay up -d --build
 ```
 
 - AnythingLLM: <http://localhost:3001>
