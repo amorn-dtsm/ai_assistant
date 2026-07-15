@@ -457,7 +457,7 @@ export default function ChatContainer({
             <DnDFileUploaderWrapper>
               <div className="flex flex-col h-full w-full items-center justify-center">
                 <div className="flex flex-col items-center w-full max-w-[750px]">
-                  <h1 className="text-white text-xl md:text-2xl mb-11 text-center">
+                  <h1 className="text-white green:text-[#171717] text-xl md:text-2xl mb-11 text-center">
                     {t("main-page.greeting")}
                   </h1>
                   <PromptInput

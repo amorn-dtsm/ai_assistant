@@ -797,6 +797,10 @@ dialog::backdrop {
   @apply text-[14px] font-bold text-white;
 }
 
+[data-theme="green"] .input-label {
+  color: var(--theme-text-primary);
+}
+
 /**
  * ==============================================
  * Markdown Styles
@@ -1237,6 +1241,26 @@ does not extend the close button beyond the viewport. */
 
 .rti--container {
   @apply !bg-theme-settings-input-bg !text-white !placeholder-white !placeholder-opacity-60 !text-sm !rounded-lg !p-2.5;
+}
+
+[data-theme="green"] .rti--container {
+  color: var(--theme-text-primary);
+}
+
+[data-theme="green"] .bg-theme-settings-input-bg.text-white {
+  color: var(--theme-text-primary);
+}
+
+[data-theme="green"] .text-white.text-opacity-60 {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme="green"] .text-white\/60 {
+  color: var(--theme-text-secondary);
+}
+
+[data-theme="green"] .text-description {
+  color: var(--theme-text-secondary);
 }
 
 @keyframes fadeUpIn {

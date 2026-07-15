@@ -160,7 +160,7 @@ export default function SuggestedChatMessages({ slug }) {
       {editingIndex >= 0 && (
         <div className="flex flex-col gap-y-4 mr-2">
           <div className="w-1/2">
-            <label className="text-white text-sm font-semibold block mb-2">
+            <label className="text-white green:text-[#171717] text-sm font-semibold block mb-2">
               Message
             </label>
             <input
@@ -177,7 +177,7 @@ export default function SuggestedChatMessages({ slug }) {
         <button
           type="button"
           onClick={addMessage}
-          className="flex gap-x-2 items-center justify-start text-white text-sm hover:text-sky-400 transition-all duration-300"
+          className="flex gap-x-2 items-center justify-start text-white green:text-[#171717] text-sm hover:text-sky-400 transition-all duration-300"
         >
           {t("general.message.add")}{" "}
           <Plus className="" size={24} weight="fill" />
@@ -188,7 +188,7 @@ export default function SuggestedChatMessages({ slug }) {
         <div className="flex justify-start">
           <button
             type="button"
-            className="transition-all duration-300 border border-slate-200 px-4 py-2 rounded-lg text-white text-sm items-center flex gap-x-2 hover:bg-slate-200 hover:text-slate-800 focus:ring-gray-800"
+            className="transition-all duration-300 border border-slate-200 px-4 py-2 rounded-lg text-white green:text-[#171717] text-sm items-center flex gap-x-2 hover:bg-slate-200 hover:text-slate-800 focus:ring-gray-800"
             onClick={handleSaveSuggestedMessages}
           >
             {t("general.message.save")}

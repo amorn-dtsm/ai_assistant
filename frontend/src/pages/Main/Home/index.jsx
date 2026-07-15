@@ -137,7 +137,7 @@ export default function Home() {
     return (
       <div
         style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-        className="transition-all duration-500 relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-zinc-900 light:bg-white w-full h-full overflow-hidden"
+        className="transition-all duration-500 relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-zinc-900 light:bg-white green:bg-white w-full h-full overflow-hidden"
       />
     );
   }
@@ -289,13 +289,13 @@ function HomeContent({ workspace, setWorkspace, threadSlug, setThreadSlug }) {
         className="relative flex md:ml-[2px] md:mr-[16px] md:my-[16px] w-full h-full z-[2]"
       >
         <ChatSettingsMenu />
-        <div className="flex-1 min-w-0 transition-all duration-500 relative md:rounded-[16px] bg-zinc-900 light:bg-white w-full h-full overflow-hidden border-none light:border-solid light:border light:border-theme-modal-border">
+        <div className="flex-1 min-w-0 transition-all duration-500 relative md:rounded-[16px] bg-zinc-900 light:bg-white green:bg-white w-full h-full overflow-hidden border-none light:border-solid light:border light:border-theme-modal-border green:border-solid green:border green:border-theme-modal-border">
           {isMobile && <SidebarMobileHeader />}
           <WorkspaceModelPicker workspaceSlug={workspace?.slug} />
           <DnDFileUploaderWrapper>
             <div className="flex flex-col h-full w-full items-center justify-center">
               <div className="flex flex-col items-center w-full max-w-[750px]">
-                <h1 className="text-white text-xl md:text-2xl mb-11 text-center">
+                <h1 className="text-white green:text-[#171717] text-xl md:text-2xl mb-11 text-center">
                   {t("main-page.greeting")}
                 </h1>
                 <PromptInput
@@ -336,10 +336,10 @@ function NoWorkspacesAssigned() {
   return (
     <div
       style={{ height: isMobile ? "100%" : "calc(100% - 32px)" }}
-      className="transition-all duration-500 relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-zinc-900 light:bg-white w-full h-full overflow-hidden"
+      className="transition-all duration-500 relative md:ml-[2px] md:mr-[16px] md:my-[16px] md:rounded-[16px] bg-zinc-900 light:bg-white green:bg-white w-full h-full overflow-hidden"
     >
       <div className="flex flex-col h-full w-full items-center justify-center">
-        <p className="text-white/60 text-sm text-center whitespace-pre-line">
+        <p className="text-white/60 green:text-[#71717A] text-sm text-center whitespace-pre-line">
           {t("home.notAssigned")}
         </p>
       </div>
