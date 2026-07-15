@@ -207,6 +207,108 @@
   --theme-button-delete-hover-bg: #fee4e2;
 }
 
+[data-theme="green"] {
+  --theme-loader: #171717;
+  --theme-bg-primary: #ffffff;
+  --theme-bg-secondary: #ffffff;
+  --theme-bg-sidebar: #025029;
+  --theme-bg-container: #ffffff;
+  --theme-popup-menu-bg: #036735;
+
+  --theme-bg-chat: #ffffff;
+  --theme-bg-chat-input: #DDE9DF;
+  --theme-text-primary: #171717;
+  --theme-text-secondary: #71717A;
+  --theme-placeholder: #71717A;
+  --theme-sidebar-item-default: #025029;
+  --theme-sidebar-item-selected: #036735;
+  --theme-sidebar-item-hover: #036735;
+
+  --theme-sidebar-item-text-inactive: #B1D3C2;
+  --theme-sidebar-item-text-active: #FFFFFF;
+
+  --theme-sidebar-item-workspace-active: #FFFFFF;
+  --theme-sidebar-item-workspace-inactive: #B1D3C2;
+
+  --theme-sidebar-subitem-default: transparent;
+  --theme-sidebar-subitem-selected: #036735;
+  --theme-sidebar-thread-selected: #025029;
+  --theme-sidebar-subitem-hover: #036735;
+  --theme-sidebar-border: #DEDEE0;
+
+  --theme-sidebar-footer-icon: #025029;
+  --theme-sidebar-footer-icon-fill: #FFFFFF;
+  --theme-sidebar-footer-icon-hover: #036735;
+
+  --theme-chat-input-border: #DEDEE0;
+  --theme-action-menu-bg: #DDE9DF;
+  --theme-action-menu-item-hover: rgba(3, 113, 58, 0.1);
+  --theme-settings-input-bg: #ffffff;
+  --theme-settings-input-placeholder: rgba(23, 23, 23, 0.5);
+  --theme-settings-input-active: rgb(3 113 58 / 0.2);
+  --theme-settings-input-text: #171717;
+  --theme-modal-border: #DEDEE0;
+
+  --theme-button-primary: #03713A;
+  --theme-button-primary-hover: #036735;
+
+  --theme-button-cta: #03713A;
+
+  --theme-file-row-even: #ffffff;
+  --theme-file-row-odd: #f9fbfd;
+  --theme-file-row-selected-even: #03713A;
+  --theme-file-row-selected-odd: #03713A;
+  --theme-file-picker-hover: #DDE9DF;
+
+  --theme-home-text: #171717;
+  --theme-home-text-secondary: #71717A;
+  --theme-home-bg-card: #ffffff;
+  --theme-home-bg-button: #DDE9DF;
+  --theme-home-border: rgba(23, 23, 23, 0.1);
+  --theme-home-button-primary: #03713A;
+  --theme-home-button-primary-hover: rgba(3, 113, 58, 0.9);
+  --theme-home-button-secondary: #DDE9DF;
+  --theme-home-button-secondary-hover: #B1D3C2;
+  --theme-home-button-secondary-text: #171717;
+  --theme-home-button-secondary-hover-text: #171717;
+  --theme-home-update-card-bg: #ffffff;
+  --theme-home-update-card-hover: #DDE9DF;
+  --theme-home-update-source: #03713A;
+
+  --theme-checklist-item-bg: #DDE9DF;
+  --theme-checklist-item-bg-hover: #B1D3C2;
+  --theme-checklist-item-text: #025029;
+  --theme-checklist-item-completed-bg: #DDE9DF;
+  --theme-checklist-item-completed-text: #03713A;
+  --theme-checklist-checkbox-fill: #03713A;
+  --theme-checklist-checkbox-text: #ffffff;
+  --theme-checklist-item-hover: #03713A;
+  --theme-checklist-checkbox-border: #DEDEE0;
+  --theme-checklist-button-border: #03713A;
+  --theme-checklist-button-text: #03713A;
+  --theme-checklist-button-hover-bg: rgba(3, 113, 58, 0.1);
+  --theme-checklist-button-hover-border: rgba(3, 113, 58, 0.8);
+
+  --theme-home-button-secondary-border-hover: #171717;
+
+  --theme-attachment-bg: #ffffff;
+  --theme-attachment-error-bg: rgba(255, 57, 59, 0.2);
+  --theme-attachment-success-bg: #DDE9DF;
+  --theme-attachment-text: #171717;
+  --theme-attachment-text-secondary: rgba(23, 23, 23, 0.8);
+  --theme-attachment-icon: #03713A;
+  --theme-attachment-icon-spinner: #03713A;
+  --theme-attachment-icon-spinner-bg: #ffffff;
+
+  --theme-button-text: #71717A;
+  --theme-button-code-hover-text: #03713A;
+  --theme-button-code-hover-bg: #DDE9DF;
+  --theme-button-disable-hover-text: #854708;
+  --theme-button-disable-hover-bg: #fef7e6;
+  --theme-button-delete-hover-text: #FF393B;
+  --theme-button-delete-hover-bg: #FFE5E2;
+}
+
 [data-theme="light"] .text-white {
   color: var(--theme-text-primary);
 }
@@ -252,7 +354,7 @@ body {
     Droid Sans,
     Helvetica Neue,
     sans-serif;
-  background-color: white;
+  background-color: var(--theme-bg-primary);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -562,6 +664,16 @@ dialog::backdrop {
   backdrop-filter: blur(2px);
 }
 
+[data-theme="green"] dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
+[data-theme="green"] .backdrop {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+}
+
 .animate-slow-pulse {
   transform: scale(1);
   animation: subtlePulse 20s infinite;
@@ -780,6 +892,12 @@ dialog::backdrop {
   color: #000;
 }
 
+[data-theme="green"] .markdown table,
+[data-theme="green"] .markdown table th,
+[data-theme="green"] .markdown table td {
+  color: #171717;
+}
+
 /* List Styles */
 .markdown ol {
   list-style: decimal-leading-zero;
@@ -896,6 +1014,11 @@ dialog::backdrop {
   border-bottom: 1px solid rgba(222, 222, 222, 0.5);
 }
 
+[data-theme="green"] .file-row.selected:nth-child(even),
+[data-theme="green"] .file-row.selected:nth-child(odd) {
+  border-bottom: 1px solid rgba(222, 222, 222, 0.5);
+}
+
 /* Flex upload modal to be a column when on small screens so that the UI
 does not extend the close button beyond the viewport. */
 @media (max-width: 1330px) {
@@ -975,6 +1098,30 @@ does not extend the close button beyond the viewport. */
   background-color: #94a3b8;
 }
 
+[data-theme="green"] .tool-call-scrollbar {
+  scrollbar-color: #cbd5e1 transparent;
+}
+
+[data-theme="green"] .tool-call-scrollbar::-webkit-scrollbar {
+  width: 3px;
+  height: 3px;
+  background-color: transparent;
+}
+
+[data-theme="green"] .tool-call-scrollbar::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
+[data-theme="green"] .tool-call-scrollbar::-webkit-scrollbar-thumb {
+  background-color: #cbd5e1;
+  border-radius: 4px;
+  border: 2px solid transparent;
+}
+
+[data-theme="green"] .tool-call-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: #94a3b8;
+}
+
 /* Recharts rendering styles */
 .recharts-text > * {
   fill: #fff;
@@ -982,6 +1129,10 @@ does not extend the close button beyond the viewport. */
 
 [data-theme="light"] .recharts-text > * {
   fill: #000;
+}
+
+[data-theme="green"] .recharts-text > * {
+  fill: #171717;
 }
 
 .recharts-legend-wrapper {
@@ -1047,6 +1198,10 @@ does not extend the close button beyond the viewport. */
 }
 
 [data-theme="light"] .search-input::-webkit-search-cancel-button {
+  filter: grayscale(100%) invert(0) brightness(0) opacity(0.5);
+}
+
+[data-theme="green"] .search-input::-webkit-search-cancel-button {
   filter: grayscale(100%) invert(0) brightness(0) opacity(0.5);
 }
 

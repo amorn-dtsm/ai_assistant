@@ -5,6 +5,7 @@ const availableThemes = {
   system: "System",
   light: "Light",
   dark: "Dark",
+  green: "Green",
 };
 
 /**
@@ -28,6 +29,10 @@ export function useTheme() {
   const [theme, _setTheme] = useState(() => {
     const stored = localStorage.getItem("theme");
     if (stored === "default") return "dark"; // migrate legacy value
+    // Defensive fallback: if stored theme is not a valid key and not "system", fall back to "system"
+    if (stored && stored !== "system" && !(stored in availableThemes)) {
+      return "system";
+    }
     return stored || "system";
   });
 
@@ -56,6 +61,7 @@ export function useTheme() {
   }, [resolvedTheme, theme]);
 
   // In development, attach keybind combinations to toggle theme
+  // Note: green theme is selectable only via the Settings dropdown, not via this keybind
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     function toggleOnKeybind(e) {
@@ -82,5 +88,6 @@ export function useTheme() {
     setTheme,
     availableThemes,
     isLight: resolvedTheme === "light",
+    isGreen: resolvedTheme === "green",
   };
 }

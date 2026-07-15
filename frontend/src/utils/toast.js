@@ -9,6 +9,7 @@ function resolveTheme() {
   const stored = localStorage?.getItem("theme") || "system";
   if (stored === "default" || stored === "dark") return "dark";
   if (stored === "light") return "light";
+  if (stored === "green") return "light"; // green theme uses light-styled toasts (white content area)
   return window.matchMedia?.("(prefers-color-scheme: light)").matches
     ? "light"
     : "dark";
