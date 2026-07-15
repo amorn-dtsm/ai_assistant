@@ -1247,8 +1247,16 @@ does not extend the close button beyond the viewport. */
   color: var(--theme-text-primary);
 }
 
-[data-theme="green"] .bg-theme-settings-input-bg.text-white {
+[data-theme="green"] .text-white {
   color: var(--theme-text-primary);
+}
+
+[data-theme="green"] .bg-theme-bg-sidebar .text-white {
+  color: #ffffff;
+}
+
+[data-theme="green"] .bg-theme-bg-sidebar .green\:text-\[\#B1D3C2\] {
+  color: #b1d3c2;
 }
 
 [data-theme="green"] .text-white.text-opacity-60 {
