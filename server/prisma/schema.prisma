@@ -119,36 +119,37 @@ model document_vectors {
 }
 
 model workspaces {
-  id                           Int                            @id @default(autoincrement())
-  name                         String
-  slug                         String                         @unique
-  vectorTag                    String?
-  createdAt                    DateTime                       @default(now())
-  openAiTemp                   Float?
-  openAiHistory                Int                            @default(20)
-  lastUpdatedAt                DateTime                       @default(now())
-  // THIS IS THE SYSTEM PROMPT FOR THE WORKSPACE
-  openAiPrompt                 String?
-  similarityThreshold          Float?                         @default(0.25)
-  chatProvider                 String?
-  chatModel                    String?
-  topN                         Int?                           @default(4)
-  chatMode                     String?                        @default("chat")
-  pfpFilename                  String?
-  agentProvider                String?
-  agentModel                   String?
-  queryRefusalResponse         String?
-  vectorSearchMode             String?                        @default("default")
-  router_id                    Int? // No relation to prevent whole table migration (SQLite limitation)
-  workspace_users              workspace_users[]
-  documents                    workspace_documents[]
-  workspace_suggested_messages workspace_suggested_messages[]
-  embed_configs                embed_configs[]
-  threads                      workspace_threads[]
-  workspace_agent_invocations  workspace_agent_invocations[]
-  prompt_history               prompt_history[]
-  workspace_parsed_files       workspace_parsed_files[]
-  memories                     memories[]
+   id                           Int                            @id @default(autoincrement())
+   name                         String
+   slug                         String                         @unique
+   vectorTag                    String?
+   createdAt                    DateTime                       @default(now())
+   openAiTemp                   Float?
+   openAiHistory                Int                            @default(20)
+   lastUpdatedAt                DateTime                       @default(now())
+   // THIS IS THE SYSTEM PROMPT FOR THE WORKSPACE
+   openAiPrompt                 String?
+   similarityThreshold          Float?                         @default(0.25)
+   chatProvider                 String?
+   chatModel                    String?
+   topN                         Int?                           @default(4)
+   chatMode                     String?                        @default("chat")
+   pfpFilename                  String?
+   agentProvider                String?
+   agentModel                   String?
+   queryRefusalResponse         String?
+   vectorSearchMode             String?                        @default("default")
+   router_id                    Int? // No relation to prevent whole table migration (SQLite limitation)
+   workspace_users              workspace_users[]
+   documents                    workspace_documents[]
+   workspace_suggested_messages workspace_suggested_messages[]
+   embed_configs                embed_configs[]
+   threads                      workspace_threads[]
+   workspace_agent_invocations  workspace_agent_invocations[]
+   prompt_history               prompt_history[]
+   workspace_parsed_files       workspace_parsed_files[]
+   memories                     memories[]
+   database_connectors          database_connectors[]
 }
 
 model workspace_threads {
@@ -459,30 +460,77 @@ model model_routers {
 }
 
 model model_router_rules {
-  id               Int           @id @default(autoincrement())
-  router_id        Int
-  enabled          Boolean       @default(true)
-  priority         Int
-  type             String        @default("calculated")
-  title            String
-  description      String?
-  // For `calculated` rules: the boolean operator joining `conditions` — "AND"
-  // (all must match) or "OR" (any must match). Null for `llm` rules.
-  condition_logic  String?
-  // For `calculated` rules: JSON-stringified array of condition objects, each
-  // shaped as { property: string, comparator: string, value: string } where
-  // `property` ∈ VALID_PROPERTIES and `comparator` ∈ VALID_COMPARATORS (see
-  // server/models/modelRouterRule.js). `value` is always stored as a string;
-  // numeric comparators parse it at evaluation time. Null for `llm` rules.
-  conditions       String?
-  route_provider   String
-  route_model      String
-  created_by       Int?
-  createdAt        DateTime      @default(now())
-  lastUpdatedAt    DateTime      @default(now())
-  router           model_routers @relation(fields: [router_id], references: [id], onDelete: Cascade)
+   id               Int           @id @default(autoincrement())
+   router_id        Int
+   enabled          Boolean       @default(true)
+   priority         Int
+   type             String        @default("calculated")
+   title            String
+   description      String?
+   // For `calculated` rules: the boolean operator joining `conditions` — "AND"
+   // (all must match) or "OR" (any must match). Null for `llm` rules.
+   condition_logic  String?
+   // For `calculated` rules: JSON-stringified array of condition objects, each
+   // shaped as { property: string, comparator: string, value: string } where
+   // `property` ∈ VALID_PROPERTIES and `comparator` ∈ VALID_COMPARATORS (see
+   // server/models/modelRouterRule.js). `value` is always stored as a string;
+   // numeric comparators parse it at evaluation time. Null for `llm` rules.
+   conditions       String?
+   route_provider   String
+   route_model      String
+   created_by       Int?
+   createdAt        DateTime      @default(now())
+   lastUpdatedAt    DateTime      @default(now())
+   router           model_routers @relation(fields: [router_id], references: [id], onDelete: Cascade)
 
-  @@unique([router_id, title])
-  @@index([router_id])
-  @@index([router_id, enabled, priority])
+   @@unique([router_id, title])
+   @@index([router_id])
+   @@index([router_id, enabled, priority])
+}
+
+model database_connectors {
+   id                    Int                              @id @default(autoincrement())
+   name                  String                           @unique
+   engine                String // mysql | postgresql | sql-server
+   connectionConfig      String // EncryptionManager-encrypted JSON: {host, port, database, username, password}
+   query                 String // admin SELECT query
+   contentColumns        String // JSON array
+   metadataColumns       String                           @default("[]") // JSON array
+   idColumn              String
+   timestampColumn       String
+   refreshFreqMinutes    Int                              @default(60)
+   batchSize             Int                              @default(500)
+   active                Boolean                          @default(true)
+   workspaceId           Int
+   lastSyncCursorTs      String? // stored as DB-echoed string to avoid TZ bugs
+   lastSyncCursorId      String?
+   lastSyncAt            DateTime?
+   lastSyncStatus        String? // success | failed | running
+   lastSyncError         String?
+   syncInProgress        Boolean                          @default(false)
+   syncStartedAt         DateTime?
+   createdAt             DateTime                         @default(now())
+   lastUpdatedAt         DateTime                         @default(now())
+   workspace             workspaces                       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+   sync_logs             database_connector_sync_logs[]
+
+   @@index([workspaceId])
+}
+
+model database_connector_sync_logs {
+   id          Int                  @id @default(autoincrement())
+   connectorId Int
+   startedAt   DateTime
+   finishedAt  DateTime?
+   status      String // running | success | failed
+   rowsRead    Int                  @default(0)
+   rowsAdded   Int                  @default(0)
+   rowsUpdated Int                  @default(0)
+   rowsSkipped Int                  @default(0)
+   cursorBefore String?
+   cursorAfter String?
+   error       String?
+   connector   database_connectors  @relation(fields: [connectorId], references: [id], onDelete: Cascade)
+
+   @@index([connectorId])
 }
