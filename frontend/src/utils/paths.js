@@ -187,6 +187,9 @@ export default {
     telegram: () => {
       return `/settings/external-connections/telegram`;
     },
+    databaseConnectors: () => {
+      return `/settings/database-connectors`;
+    },
     scheduledJobs: () => {
       return `/settings/scheduled-jobs`;
     },

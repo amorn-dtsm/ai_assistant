@@ -421,6 +421,15 @@ const router = createBrowserRouter([
           };
         },
       },
+      {
+        path: "/settings/database-connectors",
+        lazy: async () => {
+          const { default: DatabaseConnectors } = await import(
+            "@/pages/Admin/DatabaseConnectors"
+          );
+          return { element: <AdminRoute Component={DatabaseConnectors} /> };
+        },
+      },
       // Catch-all route for 404s
       {
         path: "*",
