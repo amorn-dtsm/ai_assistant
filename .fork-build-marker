@@ -1,0 +1,23 @@
+amorn-dtsm/ai_assistant — FORK BUILD MARKER
+============================================
+
+Presence of this file tells deploy-image.ps1 that the current build tree is the
+CUSTOMIZED FORK, not stock upstream (Mintplex-Labs/anything-llm).
+
+deploy-image.ps1 refuses to build/ship the `ai-assistant:latest` image unless
+this file exists in the build context. A raw upstream/stock checkout does not
+have this file, so it can never accidentally overwrite the production image with
+a feature-less stock build.
+
+WHY A MARKER INSTEAD OF A FEATURE LIST
+--------------------------------------
+The guard is intentionally FEATURE-AGNOSTIC. Do NOT list individual features
+(source-viewer, LINE channel, etc.) in the guard — that would force you to edit
+the guard every time you add a feature, and would wrongly block deploying a
+branch that has one feature but not another.
+
+Instead: this single marker is committed once to the fork base branch and is
+inherited by every feature branch built on top of it. Add as many features as
+you like — you never touch the guard or this file again.
+
+DO NOT DELETE. DO NOT COMMIT THIS FILE TO THE UPSTREAM REMOTE.
