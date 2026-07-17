@@ -37,7 +37,11 @@ class PostgresSQLConnector {
       result.count = query.rowCount;
     } catch (err) {
       console.log(this.className, err);
-      result.error = err.message;
+      // AggregateError (e.g. ECONNREFUSED) has an empty .message but
+      // stores the real errors in .errors[]. Fall back to the error code
+      // or stringified representation so the caller always sees a truthy
+      // error value when something went wrong.
+      result.error = err.message || err.code || String(err);
     } finally {
       // Check client is connected before closing since we use this for validation
       if (this._client) {
