@@ -10,3 +10,6 @@ aws_cf_deploy_anything_llm.json
 yarn.lock
 *.bak
 .idea
+
+# Local agent workspace (plans, notepads, evidence — may contain secrets/logs)
+.sisyphus/
