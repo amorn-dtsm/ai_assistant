@@ -34,7 +34,10 @@ const DatabaseConnectorSyncLog = {
    * @param {string|null} [opts.error=null]
    * @returns {Promise<object|null>}
    */
-  finish: async function (id, { status, counts = {}, cursorAfter = null, error: syncError = null } = {}) {
+  finish: async function (
+    id,
+    { status, counts = {}, cursorAfter = null, error: syncError = null } = {}
+  ) {
     try {
       const log = await prisma.database_connector_sync_logs.update({
         where: { id: Number(id) },
@@ -93,10 +96,7 @@ const DatabaseConnectorSyncLog = {
       });
       return result.count;
     } catch (error) {
-      console.error(
-        "DatabaseConnectorSyncLog.failOrphanedRuns",
-        error.message
-      );
+      console.error("DatabaseConnectorSyncLog.failOrphanedRuns", error.message);
       return 0;
     }
   },

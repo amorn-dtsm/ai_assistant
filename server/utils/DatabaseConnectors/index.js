@@ -63,7 +63,8 @@ function validateAdminQuery(query) {
   if (/;[\s]*\S/.test(trimmed)) {
     return {
       valid: false,
-      error: "Query must be a single statement (no semicolons followed by additional statements).",
+      error:
+        "Query must be a single statement (no semicolons followed by additional statements).",
     };
   }
 
@@ -98,12 +99,16 @@ function validateIdentifier(name) {
  * @param {object|null} opts.cursor - {ts: string, id: string} or null
  * @returns {{sql: string, params: Array}}
  */
-function buildSyncQuery({ query, timestampColumn, idColumn, batchSize, cursor }) {
+function buildSyncQuery({
+  query,
+  timestampColumn,
+  idColumn,
+  batchSize,
+  cursor,
+}) {
   // Validate identifiers before interpolation
   if (!validateIdentifier(timestampColumn)) {
-    throw new Error(
-      `Invalid timestampColumn identifier: "${timestampColumn}"`
-    );
+    throw new Error(`Invalid timestampColumn identifier: "${timestampColumn}"`);
   }
   if (!validateIdentifier(idColumn)) {
     throw new Error(`Invalid idColumn identifier: "${idColumn}"`);

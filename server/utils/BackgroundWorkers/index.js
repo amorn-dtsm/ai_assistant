@@ -128,8 +128,7 @@ class BackgroundService {
     }
 
     // Mark orphaned database connector sync logs as failed
-    const dbOrphanedCount =
-      await DatabaseConnectorSyncLog.failOrphanedRuns();
+    const dbOrphanedCount = await DatabaseConnectorSyncLog.failOrphanedRuns();
     if (dbOrphanedCount > 0) {
       this.#log(
         `Marked ${dbOrphanedCount} orphaned db-connector sync log(s) as failed`

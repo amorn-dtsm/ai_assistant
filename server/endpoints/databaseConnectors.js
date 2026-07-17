@@ -23,10 +23,7 @@ const {
 } = require("../utils/middleware/multiUserProtected");
 const { validatedRequest } = require("../utils/middleware/validatedRequest");
 
-const ADMIN_MIDDLEWARE = [
-  validatedRequest,
-  flexUserRoleValid([ROLES.admin]),
-];
+const ADMIN_MIDDLEWARE = [validatedRequest, flexUserRoleValid([ROLES.admin])];
 
 /**
  * Recalculate whether the db-connector-sync poller job should be running
@@ -34,9 +31,7 @@ const ADMIN_MIDDLEWARE = [
  */
 async function recalcPollerJob() {
   try {
-    const {
-      BackgroundService,
-    } = require("../utils/BackgroundWorkers/index");
+    const { BackgroundService } = require("../utils/BackgroundWorkers/index");
     const bgService = new BackgroundService();
     const shouldRun = await DatabaseConnector.anyActive();
     await bgService.syncDbConnectorJob(shouldRun);
@@ -160,10 +155,7 @@ function databaseConnectorEndpoints(app) {
           const existingConfig = DatabaseConnector.decryptedConfig(existing);
           const newConfig = { ...existingConfig, ...body.connectionConfig };
           // If password is not provided in the update, keep existing password
-          if (
-            body.connectionConfig.password === undefined &&
-            existingConfig
-          ) {
+          if (body.connectionConfig.password === undefined && existingConfig) {
             newConfig.password = existingConfig.password;
           }
           const encrypted = encManager.encrypt(JSON.stringify(newConfig));
@@ -268,7 +260,9 @@ function databaseConnectorEndpoints(app) {
         // Validate query first — reject before ever opening a connection
         const queryCheck = validateAdminQuery(query);
         if (!queryCheck.valid) {
-          response.status(400).json({ success: false, error: queryCheck.error });
+          response
+            .status(400)
+            .json({ success: false, error: queryCheck.error });
           return;
         }
 
@@ -284,7 +278,9 @@ function databaseConnectorEndpoints(app) {
         ]);
 
         if (!connResult.success) {
-          response.status(400).json({ success: false, error: connResult.error });
+          response
+            .status(400)
+            .json({ success: false, error: connResult.error });
           return;
         }
 
@@ -312,8 +308,7 @@ function databaseConnectorEndpoints(app) {
 
         // Extract column names and sample rows
         const sampleRows = queryResult.rows || [];
-        const columns =
-          sampleRows.length > 0 ? Object.keys(sampleRows[0]) : [];
+        const columns = sampleRows.length > 0 ? Object.keys(sampleRows[0]) : [];
 
         response.status(200).json({ success: true, columns, sampleRows });
       } catch (e) {
