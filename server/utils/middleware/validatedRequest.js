@@ -80,6 +80,21 @@ async function validateMultiUserRequest(request, response, next) {
   }
 
   const valid = decodeJWT(token);
+  if (valid?.kcIdentity) {
+    const { resolveLocalUser } = require("../oidc/keycloak");
+    const kcUser = await resolveLocalUser(valid.kcIdentity);
+    if (!kcUser) {
+      response.status(401).json({ error: "Invalid auth for user." });
+      return;
+    }
+    if (kcUser.suspended) {
+      response.status(401).json({ error: "User is suspended from system" });
+      return;
+    }
+    response.locals.user = kcUser;
+    next();
+    return;
+  }
   if (!valid || !valid.id) {
     response.status(401).json({
       error: "Invalid auth token.",

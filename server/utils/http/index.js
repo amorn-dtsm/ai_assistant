@@ -49,6 +49,10 @@ async function userFromSession(request, response = null) {
   }
 
   const valid = decodeJWT(token);
+  if (valid?.kcIdentity) {
+    const { resolveLocalUser } = require("../oidc/keycloak");
+    return await resolveLocalUser(valid.kcIdentity);
+  }
   if (!valid || !valid.id) {
     return null;
   }
@@ -61,6 +65,19 @@ function decodeJWT(jwtToken) {
   try {
     return JWT.verify(jwtToken, process.env.JWT_SECRET);
   } catch {}
+
+  // Not one of our own HS256 tokens - try native Keycloak RS256 validation.
+  try {
+    const {
+      keycloakOIDCEnabled,
+      verifyKeycloakToken,
+    } = require("../oidc/keycloak");
+    if (keycloakOIDCEnabled()) {
+      const kcIdentity = verifyKeycloakToken(jwtToken);
+      if (kcIdentity) return { p: null, id: null, username: null, kcIdentity };
+    }
+  } catch {}
+
   return { p: null, id: null, username: null };
 }
 
