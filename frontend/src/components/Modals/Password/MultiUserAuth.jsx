@@ -8,6 +8,7 @@ import { useModal } from "@/hooks/useModal";
 import RecoveryCodeModal from "@/components/Modals/DisplayRecoveryCodeModal";
 import { useTranslation } from "react-i18next";
 import { t } from "i18next";
+import { fetchOidcConfig, loginWithKeycloak } from "@/utils/keycloakAuth";
 
 const RecoveryForm = ({ onSubmit, setShowRecoveryForm }) => {
   const [username, setUsername] = useState("");
@@ -181,6 +182,7 @@ export default function MultiUserAuth() {
   const [showRecoveryForm, setShowRecoveryForm] = useState(false);
   const [showResetPasswordForm, setShowResetPasswordForm] = useState(false);
   const [customAppName, setCustomAppName] = useState(null);
+  const [oidcEnabled, setOidcEnabled] = useState(false);
 
   const {
     isOpen: isRecoveryCodeModalOpen,
@@ -270,6 +272,9 @@ export default function MultiUserAuth() {
       setLoading(false);
     };
     fetchCustomAppName();
+    fetchOidcConfig()
+      .then((cfg) => setOidcEnabled(!!cfg?.enabled))
+      .catch(() => {});
   }, []);
 
   if (showRecoveryForm) {
@@ -340,6 +345,15 @@ export default function MultiUserAuth() {
               ? t("login.multi-user.validating")
               : t("login.multi-user.login")}
           </button>
+          {oidcEnabled && (
+            <button
+              type="button"
+              onClick={loginWithKeycloak}
+              className="text-zinc-950 bg-white hover:bg-zinc-300 light:bg-sky-200 light:text-slate-950 light:hover:bg-sky-300 green:bg-[#03713A] green:text-white green:hover:bg-[#036735] text-sm font-semibold rounded-lg border-primary-button h-[34px] w-full"
+            >
+              Sign in with SSO
+            </button>
+          )}
           <button
             type="button"
             className="text-zinc-200 light:text-zinc-600 green:text-[#71717A] hover:text-sky-300 light:hover:text-sky-600 green:hover:text-[#03713A] hover:underline text-sm flex gap-x-1"

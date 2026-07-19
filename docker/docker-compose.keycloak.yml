@@ -1,0 +1,18 @@
+# Native Keycloak OIDC overlay for AnythingLLM.
+#
+# Usage (from the ./docker directory):
+#   docker compose -f docker-compose.yml -f docker-compose.keycloak.yml up -d
+#
+# This file wires Keycloak OIDC environment variables into the AnythingLLM
+# container for native token validation (Option B). Point KEYCLOAK_ISSUER at
+# your production Keycloak realm. See keycloak-sso-relay/README.md for the
+# legacy relay approach (Option A).
+
+services:
+  anything-llm:
+    environment:
+      KEYCLOAK_OIDC_ISSUER: ${KEYCLOAK_ISSUER:-}
+      KEYCLOAK_OIDC_CLIENT_ID: ${KEYCLOAK_SPA_CLIENT_ID:-anythingllm-spa}
+      KEYCLOAK_ROLE_ADMIN: ${KEYCLOAK_ROLE_ADMIN:-anythingllm-admin}
+      KEYCLOAK_ROLE_MANAGER: ${KEYCLOAK_ROLE_MANAGER:-anythingllm-manager}
+      KEYCLOAK_SSO_DEFAULT: ${KEYCLOAK_SSO_DEFAULT:-}
