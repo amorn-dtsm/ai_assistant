@@ -36,7 +36,7 @@ const { agentFlowEndpoints } = require("./endpoints/agentFlows");
 const { mcpServersEndpoints } = require("./endpoints/mcpServers");
 const { mobileEndpoints } = require("./endpoints/mobile");
 const { webPushEndpoints } = require("./endpoints/webPush");
-const { telegramEndpoints } = require("./endpoints/telegram");
+const { registerAllRoutes } = require("./utils/channels");
 const { scheduledJobEndpoints } = require("./endpoints/scheduledJobs");
 const {
   outlookAgentEndpoints,
@@ -64,7 +64,14 @@ if (
 }
 app.use(cors({ origin: true }));
 app.use(bodyParser.text({ limit: FILE_LIMIT }));
-app.use(bodyParser.json({ limit: FILE_LIMIT }));
+app.use(
+  bodyParser.json({
+    limit: FILE_LIMIT,
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  })
+);
 app.use(
   bodyParser.urlencoded({
     limit: FILE_LIMIT,
@@ -100,7 +107,7 @@ agentFlowEndpoints(apiRouter);
 mcpServersEndpoints(apiRouter);
 mobileEndpoints(apiRouter);
 webPushEndpoints(apiRouter);
-telegramEndpoints(apiRouter);
+registerAllRoutes(apiRouter);
 scheduledJobEndpoints(apiRouter);
 outlookAgentEndpoints(apiRouter);
 googleAgentSkillEndpoints(apiRouter);
