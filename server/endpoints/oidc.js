@@ -13,6 +13,7 @@ function oidcEndpoints(router) {
         enabled: keycloakOIDCEnabled(),
         issuer: process.env.KEYCLOAK_OIDC_ISSUER || null,
         clientId: process.env.KEYCLOAK_OIDC_CLIENT_ID || null,
+        defaultSSO: ["1", "true"].includes(String(process.env.KEYCLOAK_SSO_DEFAULT || "").toLowerCase()),
       });
     } catch (error) {
       console.error(error);

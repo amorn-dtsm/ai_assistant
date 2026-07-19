@@ -121,6 +121,7 @@ export async function completeOidcLogin() {
     }
   }
 
+  clearSsoAutoAttempt();
   scheduleTokenRefresh();
   return true;
 }
@@ -187,6 +188,23 @@ export function initKeycloakSession() {
   } else {
     scheduleTokenRefresh();
   }
+}
+
+// ── SSO auto-redirect loop guard ─────────────────────────────────────
+
+const SSO_AUTO_GUARD_KEY = "kc_sso_auto_attempt";
+
+export function markSsoAutoAttempt() {
+  sessionStorage.setItem(SSO_AUTO_GUARD_KEY, String(Date.now()));
+}
+
+export function recentSsoAutoAttempt(windowMs = 30_000) {
+  const ts = Number(sessionStorage.getItem(SSO_AUTO_GUARD_KEY) || "0");
+  return Date.now() - ts < windowMs;
+}
+
+export function clearSsoAutoAttempt() {
+  sessionStorage.removeItem(SSO_AUTO_GUARD_KEY);
 }
 
 export async function keycloakLogout() {

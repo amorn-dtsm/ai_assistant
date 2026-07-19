@@ -23,6 +23,7 @@ services:
       KEYCLOAK_OIDC_CLIENT_ID: ${KEYCLOAK_SPA_CLIENT_ID:-anythingllm-spa}
       KEYCLOAK_ROLE_ADMIN: ${KEYCLOAK_ROLE_ADMIN:-anythingllm-admin}
       KEYCLOAK_ROLE_MANAGER: ${KEYCLOAK_ROLE_MANAGER:-anythingllm-manager}
+      KEYCLOAK_SSO_DEFAULT: ${KEYCLOAK_SSO_DEFAULT:-}
 
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
