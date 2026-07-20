@@ -29,7 +29,7 @@ const DatabaseConnectorSyncLog = {
    * @param {number} id - Sync log ID
    * @param {object} opts
    * @param {string} opts.status - "success" | "failed"
-   * @param {object} [opts.counts={}] - {rowsRead, rowsAdded, rowsUpdated, rowsSkipped}
+   * @param {object} [opts.counts={}] - {rowsRead, rowsAdded, rowsUpdated, rowsSkipped, rowsDeleted}
    * @param {string|null} [opts.cursorAfter=null]
    * @param {string|null} [opts.error=null]
    * @returns {Promise<object|null>}
@@ -48,6 +48,7 @@ const DatabaseConnectorSyncLog = {
           rowsAdded: counts.rowsAdded ?? 0,
           rowsUpdated: counts.rowsUpdated ?? 0,
           rowsSkipped: counts.rowsSkipped ?? 0,
+          rowsDeleted: counts.rowsDeleted ?? 0,
           cursorAfter: cursorAfter ? String(cursorAfter) : null,
           error: syncError ? String(syncError) : null,
         },

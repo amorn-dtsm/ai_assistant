@@ -28,6 +28,9 @@ const DatabaseConnector = {
    * @param {number} [data.refreshFreqMinutes=60]
    * @param {number} [data.batchSize=500]
    * @param {number} data.workspaceId
+   * @param {boolean} [data.trackDeletions=false]
+   * @param {number} [data.reconcileEveryNRuns=10]
+   * @param {string} [data.softDeleteColumn]
    * @returns {Promise<{connector: object|null, error: string|null}>}
    */
   create: async function (data) {
@@ -44,6 +47,9 @@ const DatabaseConnector = {
         refreshFreqMinutes = 60,
         batchSize = 500,
         workspaceId,
+        trackDeletions = false,
+        reconcileEveryNRuns = 10,
+        softDeleteColumn,
       } = data;
 
       // Validate engine
@@ -102,6 +108,27 @@ const DatabaseConnector = {
         };
       }
 
+      // Validate softDeleteColumn if provided
+      if (softDeleteColumn && !validateIdentifier(softDeleteColumn)) {
+        return {
+          connector: null,
+          error: `Invalid softDeleteColumn identifier: "${softDeleteColumn}"`,
+        };
+      }
+
+      // Validate reconcileEveryNRuns if provided
+      if (
+        reconcileEveryNRuns !== undefined &&
+        (typeof reconcileEveryNRuns !== "number" ||
+          !Number.isFinite(reconcileEveryNRuns) ||
+          reconcileEveryNRuns < 1)
+      ) {
+        return {
+          connector: null,
+          error: "reconcileEveryNRuns must be >= 1.",
+        };
+      }
+
       // Validate workspace exists
       const workspace = await prisma.workspaces.findUnique({
         where: { id: Number(workspaceId) },
@@ -147,6 +174,9 @@ const DatabaseConnector = {
           refreshFreqMinutes: Number(refreshFreqMinutes),
           batchSize: Number(batchSize),
           workspaceId: Number(workspaceId),
+          trackDeletions: Boolean(trackDeletions),
+          reconcileEveryNRuns: Number(reconcileEveryNRuns),
+          softDeleteColumn: softDeleteColumn ? String(softDeleteColumn) : null,
         },
       });
 
@@ -195,12 +225,34 @@ const DatabaseConnector = {
 
   /**
    * Update a connector by id.
+   * Validates softDeleteColumn and reconcileEveryNRuns if provided in patch.
    * @param {number} id
    * @param {object} patch - Fields to update
    * @returns {Promise<{connector: object|null, error: string|null}>}
    */
   update: async function (id, patch = {}) {
     try {
+      // Validate softDeleteColumn if provided
+      if (patch.softDeleteColumn && !validateIdentifier(patch.softDeleteColumn)) {
+        return {
+          connector: null,
+          error: `Invalid softDeleteColumn identifier: "${patch.softDeleteColumn}"`,
+        };
+      }
+
+      // Validate reconcileEveryNRuns if provided
+      if (
+        patch.reconcileEveryNRuns !== undefined &&
+        (typeof patch.reconcileEveryNRuns !== "number" ||
+          !Number.isFinite(patch.reconcileEveryNRuns) ||
+          patch.reconcileEveryNRuns < 1)
+      ) {
+        return {
+          connector: null,
+          error: "reconcileEveryNRuns must be >= 1.",
+        };
+      }
+
       const connector = await prisma.database_connectors.update({
         where: { id: Number(id) },
         data: { ...patch, lastUpdatedAt: new Date() },
@@ -256,6 +308,7 @@ const DatabaseConnector = {
    * Return a redacted version of a connector safe for API responses.
    * Decrypts connectionConfig internally but strips the password before returning.
    * Returns all other connector fields as-is plus a redacted connectionConfig.
+   * Includes new deletion tracking fields: trackDeletions, reconcileEveryNRuns, softDeleteColumn, runsSinceReconcile.
    *
    * @param {object} connector - A connector record with encrypted connectionConfig
    * @returns {object} Connector with connectionConfig = {host, port, database, username}

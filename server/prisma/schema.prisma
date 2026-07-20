@@ -509,6 +509,10 @@ model database_connectors {
    lastSyncError         String?
    syncInProgress        Boolean                          @default(false)
    syncStartedAt         DateTime?
+   trackDeletions        Boolean                          @default(false)
+   reconcileEveryNRuns   Int                              @default(10)
+   softDeleteColumn      String?
+   runsSinceReconcile    Int                              @default(0)
    createdAt             DateTime                         @default(now())
    lastUpdatedAt         DateTime                         @default(now())
    workspace             workspaces                       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -527,6 +531,7 @@ model database_connector_sync_logs {
    rowsAdded   Int                  @default(0)
    rowsUpdated Int                  @default(0)
    rowsSkipped Int                  @default(0)
+   rowsDeleted Int                  @default(0)
    cursorBefore String?
    cursorAfter String?
    error       String?

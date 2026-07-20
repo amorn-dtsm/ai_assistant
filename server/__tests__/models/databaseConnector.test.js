@@ -652,4 +652,101 @@ describe("DatabaseConnectorSyncLog", () => {
       expect(count).toBe(0);
     });
   });
+
+  // ─── Deletion Tracking Tests ────────────────────────────────────
+  describe("deletion tracking fields", () => {
+    test("create with new deletion tracking fields persists all values", async () => {
+      mockPrisma.workspaces.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.database_connectors.findUnique.mockResolvedValue(null);
+      let capturedData = null;
+      mockPrisma.database_connectors.create.mockImplementation(({ data }) => {
+        capturedData = data;
+        return Promise.resolve({ id: 1, ...data });
+      });
+
+      const data = {
+        ...validCreateData(),
+        trackDeletions: true,
+        reconcileEveryNRuns: 5,
+        softDeleteColumn: "is_deleted",
+      };
+      const { connector, error } = await DatabaseConnector.create(data);
+      expect(error).toBeNull();
+      expect(connector).not.toBeNull();
+      expect(capturedData.trackDeletions).toBe(true);
+      expect(capturedData.reconcileEveryNRuns).toBe(5);
+      expect(capturedData.softDeleteColumn).toBe("is_deleted");
+    });
+
+    test("rejects invalid softDeleteColumn identifier", async () => {
+      const data = {
+        ...validCreateData(),
+        softDeleteColumn: "x; --",
+      };
+      const { connector, error } = await DatabaseConnector.create(data);
+      expect(connector).toBeNull();
+      expect(error).toMatch(/softDeleteColumn/);
+    });
+
+    test("rejects reconcileEveryNRuns = 0", async () => {
+      mockPrisma.workspaces.findUnique.mockResolvedValue({ id: 1 });
+      mockPrisma.database_connectors.findUnique.mockResolvedValue(null);
+      const data = {
+        ...validCreateData(),
+        reconcileEveryNRuns: 0,
+      };
+      const { connector, error } = await DatabaseConnector.create(data);
+      expect(connector).toBeNull();
+      expect(error).toMatch(/reconcileEveryNRuns/);
+    });
+
+    test("redact includes new deletion tracking fields", async () => {
+      const connector = {
+        id: 1,
+        name: "test",
+        connectionConfig: new EncryptionManager().encrypt(
+          JSON.stringify({
+            host: "localhost",
+            port: 5432,
+            database: "testdb",
+            username: "user",
+            password: "hunter2",
+          })
+        ),
+        trackDeletions: true,
+        reconcileEveryNRuns: 5,
+        softDeleteColumn: "is_deleted",
+        runsSinceReconcile: 2,
+      };
+      const redacted = DatabaseConnector.redact(connector);
+      expect(redacted.trackDeletions).toBe(true);
+      expect(redacted.reconcileEveryNRuns).toBe(5);
+      expect(redacted.softDeleteColumn).toBe("is_deleted");
+      expect(redacted.runsSinceReconcile).toBe(2);
+      expect(redacted.connectionConfig.password).toBeUndefined();
+    });
+
+    test("syncLog finish persists rowsDeleted from counts", async () => {
+      let capturedData = null;
+      mockPrisma.database_connector_sync_logs.update.mockImplementation(
+        ({ data }) => {
+          capturedData = data;
+          return Promise.resolve({ id: 1, ...data });
+        }
+      );
+
+      const log = await DatabaseConnectorSyncLog.finish(1, {
+        status: "success",
+        counts: {
+          rowsRead: 100,
+          rowsAdded: 10,
+          rowsUpdated: 5,
+          rowsSkipped: 2,
+          rowsDeleted: 3,
+        },
+      });
+      expect(log).not.toBeNull();
+      expect(capturedData.rowsDeleted).toBe(3);
+    });
+  });
 });
