@@ -204,9 +204,75 @@ async function removeConnectorDocuments({ workspace, connectorId }) {
   }
 }
 
+/**
+ * Remove a single row document from a workspace.
+ *
+ * 1. Validate workspace (id+slug) and docPath (non-empty).
+ * 2. Check path safety using normalizePath + isWithin.
+ * 3. Normalize docpath to forward slashes for DB ops.
+ * 4. If a workspace_documents row exists → Document.removeDocuments (vectors + DB row).
+ * 5. Delete the JSON file from storage (best-effort).
+ * 6. Return {success:true, removed:true|false} (removed:false when no doc existed — idempotent).
+ *
+ * @param {Object} params
+ * @param {Object} params.workspace - Workspace record (must have id, slug).
+ * @param {string} params.docPath - Relative doc path, e.g. "db-connectors/123/row-1.json".
+ * @returns {Promise<{success: boolean, removed?: boolean, error?: string}>}
+ */
+async function removeRowDocument({ workspace, docPath }) {
+  try {
+    if (!workspace?.id || !workspace?.slug) {
+      return { success: false, error: "Invalid workspace" };
+    }
+    if (!docPath) {
+      return { success: false, error: "No docPath provided" };
+    }
+
+    // Validate path safety using normalizePath for traversal checks
+    const normalizedForValidation = normalizePath(docPath);
+    const fullFilePath = path.resolve(documentsPath, normalizedForValidation);
+    if (!isWithin(documentsPath, fullFilePath)) {
+      return { success: false, error: "Invalid document path" };
+    }
+
+    // Use forward-slash docpath for all DB operations
+    const dbDocPath = docPath.replace(/\\/g, "/");
+
+    // Check if document exists in this workspace
+    const existing = await Document.get({
+      docpath: dbDocPath,
+      workspaceId: workspace.id,
+    });
+
+    // If no document exists, return idempotent success
+    if (!existing) {
+      return { success: true, removed: false };
+    }
+
+    // Remove from vector DB + database
+    await Document.removeDocuments(workspace, [dbDocPath]);
+
+    // Delete JSON file from storage (best-effort)
+    try {
+      const safePath = normalizePath(dbDocPath);
+      const fullPath = path.resolve(documentsPath, safePath);
+      if (isWithin(documentsPath, fullPath) && fs.existsSync(fullPath)) {
+        fs.unlinkSync(fullPath);
+      }
+    } catch {
+      // Best-effort file deletion — continue on error
+    }
+
+    return { success: true, removed: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   upsertRowDocument,
   removeConnectorDocuments,
+  removeRowDocument,
   buildDocumentJson,
   estimateTokenCount,
 };

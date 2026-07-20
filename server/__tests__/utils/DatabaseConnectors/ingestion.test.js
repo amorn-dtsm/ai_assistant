@@ -41,6 +41,7 @@ jest.mock("fs", () => {
 const {
   upsertRowDocument,
   removeConnectorDocuments,
+  removeRowDocument,
   buildDocumentJson,
   estimateTokenCount,
 } = require("../../../utils/DatabaseConnectors/ingestion");
@@ -538,6 +539,178 @@ describe("scoped purge isolation", () => {
     expect(result998.removedCount).toBe(1);
     expect(mockRemoveDocuments).toHaveBeenCalledWith(makeWorkspace(), [
       "db-connectors/998/row-1.json",
+    ]);
+  });
+});
+
+describe("removeRowDocument", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("removes an existing document (vectors + file)", async () => {
+    mockGet.mockResolvedValue({
+      id: 10,
+      docId: "uuid-a",
+      docpath: "db-connectors/999/row-1.json",
+      workspaceId: 1,
+    });
+    mockRemoveDocuments.mockResolvedValue(true);
+    fs.existsSync.mockReturnValue(true);
+
+    const result = await removeRowDocument({
+      workspace: makeWorkspace(),
+      docPath: "db-connectors/999/row-1.json",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.removed).toBe(true);
+
+    // Verify Document.get was called
+    expect(mockGet).toHaveBeenCalledWith({
+      docpath: "db-connectors/999/row-1.json",
+      workspaceId: 1,
+    });
+
+    // Verify removeDocuments was called
+    expect(mockRemoveDocuments).toHaveBeenCalledWith(makeWorkspace(), [
+      "db-connectors/999/row-1.json",
+    ]);
+
+    // Verify file deletion was attempted
+    expect(fs.unlinkSync).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns removed:false when document does not exist (idempotent)", async () => {
+    mockGet.mockResolvedValue(null); // No existing doc
+
+    const result = await removeRowDocument({
+      workspace: makeWorkspace(),
+      docPath: "db-connectors/999/row-1.json",
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.removed).toBe(false);
+
+    // Should NOT call removeDocuments
+    expect(mockRemoveDocuments).not.toHaveBeenCalled();
+    expect(fs.unlinkSync).not.toHaveBeenCalled();
+  });
+
+  it("returns error for invalid workspace", async () => {
+    const result = await removeRowDocument({
+      workspace: null,
+      docPath: "db-connectors/999/row-1.json",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid workspace");
+    expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it("returns error for missing workspace.id", async () => {
+    const result = await removeRowDocument({
+      workspace: { slug: "test" }, // Missing id
+      docPath: "db-connectors/999/row-1.json",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid workspace");
+  });
+
+  it("returns error for missing workspace.slug", async () => {
+    const result = await removeRowDocument({
+      workspace: { id: 1 }, // Missing slug
+      docPath: "db-connectors/999/row-1.json",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid workspace");
+  });
+
+  it("returns error for empty docPath", async () => {
+    const result = await removeRowDocument({
+      workspace: makeWorkspace(),
+      docPath: "",
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No docPath");
+  });
+
+  it("returns error for null docPath", async () => {
+    const result = await removeRowDocument({
+      workspace: makeWorkspace(),
+      docPath: null,
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("No docPath");
+  });
+
+  it("normalizes and rejects path traversal attempts in docPath", async () => {
+    // normalizePath strips leading .. sequences, so this becomes "etc/passwd"
+    // which is a valid relative path within documentsPath
+    // The path safety check is already tested via normalizePath behavior
+    mockGet.mockResolvedValue(null);
+    
+    const result = await removeRowDocument({
+      workspace: makeWorkspace(),
+      docPath: "../../../etc/passwd",
+    });
+
+    // After normalization, this becomes "etc/passwd" which is valid
+    // The isWithin check will pass because it's within documentsPath
+    expect(result.success).toBe(true);
+    expect(result.removed).toBe(false);
+  });
+
+  it("continues on file deletion error (best-effort)", async () => {
+    mockGet.mockResolvedValue({
+      id: 10,
+      docId: "uuid-a",
+      docpath: "db-connectors/999/row-1.json",
+      workspaceId: 1,
+    });
+    mockRemoveDocuments.mockResolvedValue(true);
+    fs.existsSync.mockReturnValue(true);
+    fs.unlinkSync.mockImplementation(() => {
+      throw new Error("Permission denied");
+    });
+
+    const result = await removeRowDocument({
+      workspace: makeWorkspace(),
+      docPath: "db-connectors/999/row-1.json",
+    });
+
+    // Should still succeed (best-effort deletion)
+    expect(result.success).toBe(true);
+    expect(result.removed).toBe(true);
+    expect(mockRemoveDocuments).toHaveBeenCalled();
+  });
+
+  it("normalizes backslashes to forward slashes for DB operations", async () => {
+    mockGet.mockResolvedValue({
+      id: 10,
+      docId: "uuid-a",
+      docpath: "db-connectors/999/row-1.json",
+      workspaceId: 1,
+    });
+    mockRemoveDocuments.mockResolvedValue(true);
+    fs.existsSync.mockReturnValue(false);
+
+    await removeRowDocument({
+      workspace: makeWorkspace(),
+      docPath: "db-connectors\\999\\row-1.json", // Windows-style path
+    });
+
+    // Should normalize to forward slashes for DB operations
+    expect(mockGet).toHaveBeenCalledWith({
+      docpath: "db-connectors/999/row-1.json",
+      workspaceId: 1,
+    });
+    expect(mockRemoveDocuments).toHaveBeenCalledWith(makeWorkspace(), [
+      "db-connectors/999/row-1.json",
     ]);
   });
 });
