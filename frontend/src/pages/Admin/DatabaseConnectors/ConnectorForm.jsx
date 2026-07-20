@@ -45,6 +45,9 @@ export default function ConnectorForm({
         refreshFreqMinutes: connector.refreshFreqMinutes || 60,
         workspaceId: connector.workspaceId || "",
         active: connector.active !== undefined ? connector.active : true,
+        trackDeletions: connector.trackDeletions ?? false,
+        reconcileEveryNRuns: connector.reconcileEveryNRuns ?? 10,
+        softDeleteColumn: connector.softDeleteColumn || "",
       };
     }
     return {
@@ -65,6 +68,9 @@ export default function ConnectorForm({
       refreshFreqMinutes: 60,
       workspaceId: "",
       active: true,
+      trackDeletions: false,
+      reconcileEveryNRuns: 10,
+      softDeleteColumn: "",
     };
   });
 
@@ -312,6 +318,73 @@ export default function ConnectorForm({
           </div>
         </fieldset>
 
+        {/* Deletion Tracking */}
+        <fieldset className="border border-white/10 rounded-lg p-4">
+          <legend className="text-xs font-semibold text-theme-text-secondary px-2 uppercase tracking-wide">
+            Deletion Tracking
+          </legend>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <FieldGroup label="Track Deletions">
+              <label className="relative inline-flex items-center cursor-pointer mt-1">
+                <input
+                  data-testid="db-connector-track-deletions-toggle"
+                  type="checkbox"
+                  checked={form.trackDeletions}
+                  onChange={(e) =>
+                    updateField("trackDeletions", e.target.checked)
+                  }
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-theme-bg-primary rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-green-500 border border-white/10" />
+                <span className="ml-2 text-sm text-theme-text-secondary">
+                  {form.trackDeletions ? "Enabled" : "Disabled"}
+                </span>
+              </label>
+            </FieldGroup>
+            <FieldGroup label="Reconcile Every N Runs">
+              <input
+                data-testid="db-connector-reconcile-runs-input"
+                type="number"
+                min={1}
+                value={form.reconcileEveryNRuns}
+                onChange={(e) =>
+                  updateField(
+                    "reconcileEveryNRuns",
+                    Math.max(1, Number(e.target.value) || 1)
+                  )
+                }
+                disabled={!form.trackDeletions}
+                className={`w-full rounded-lg border border-white/10 bg-theme-bg-primary px-3 py-2 text-sm text-theme-text-primary focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                  !form.trackDeletions
+                    ? "opacity-40 cursor-not-allowed"
+                    : ""
+                }`}
+              />
+            </FieldGroup>
+            <FieldGroup label="Soft-Delete Column (optional)">
+              <input
+                data-testid="db-connector-soft-delete-column-input"
+                type="text"
+                value={form.softDeleteColumn}
+                onChange={(e) =>
+                  updateField("softDeleteColumn", e.target.value)
+                }
+                placeholder="e.g. is_deleted"
+                disabled={!form.trackDeletions}
+                className={`w-full rounded-lg border border-white/10 bg-theme-bg-primary px-3 py-2 text-sm text-theme-text-primary placeholder:text-theme-text-secondary/50 focus:outline-none focus:ring-1 focus:ring-blue-500 ${
+                  !form.trackDeletions
+                    ? "opacity-40 cursor-not-allowed"
+                    : ""
+                }`}
+              />
+              <p className="text-[10px] text-theme-text-secondary mt-1">
+                Rows with a truthy value in this column are removed from RAG.
+                Leave blank if your schema has no soft-delete marker.
+              </p>
+            </FieldGroup>
+          </div>
+        </fieldset>
+
         {/* Sync Settings */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <FieldGroup label="Refresh Interval (minutes)">
@@ -374,16 +447,26 @@ export default function ConnectorForm({
               {testing ? "Testing…" : "Test Connection"}
             </button>
             {testResult && (
-              <span
-                data-testid="db-connector-test-result"
-                className={`text-xs font-medium ${
-                  testResult.success ? "text-green-400" : "text-red-400"
-                }`}
-              >
-                {testResult.success
-                  ? `Connected — ${testResult.columns?.length || 0} columns found`
-                  : testResult.error}
-              </span>
+              <div className="flex flex-col gap-y-1">
+                <span
+                  data-testid="db-connector-test-result"
+                  className={`text-xs font-medium ${
+                    testResult.success ? "text-green-400" : "text-red-400"
+                  }`}
+                >
+                  {testResult.success
+                    ? `Connected — ${testResult.columns?.length || 0} columns found`
+                    : testResult.error}
+                </span>
+                {testResult.success && testResult.warning && (
+                  <span
+                    data-testid="db-connector-test-warning"
+                    className="text-xs font-medium text-amber-400 bg-amber-500/10 border border-amber-500/30 rounded px-2 py-0.5 inline-block"
+                  >
+                    {testResult.warning}
+                  </span>
+                )}
+              </div>
             )}
           </div>
 

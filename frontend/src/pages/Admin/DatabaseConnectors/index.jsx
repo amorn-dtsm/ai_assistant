@@ -34,6 +34,9 @@ function defaultFormState() {
     refreshFreqMinutes: 60,
     workspaceId: "",
     active: true,
+    trackDeletions: false,
+    reconcileEveryNRuns: 10,
+    softDeleteColumn: "",
   };
 }
 
@@ -507,6 +510,7 @@ function ConnectorLogsView({ connectorId }) {
           <th className="px-3 py-1.5">Added</th>
           <th className="px-3 py-1.5">Updated</th>
           <th className="px-3 py-1.5">Skipped</th>
+          <th className="px-3 py-1.5">Deleted</th>
           <th className="px-3 py-1.5">Error</th>
         </tr>
       </thead>
@@ -532,6 +536,7 @@ function ConnectorLogsView({ connectorId }) {
             <td className="px-3 py-1.5">{log.rowsAdded ?? "—"}</td>
             <td className="px-3 py-1.5">{log.rowsUpdated ?? "—"}</td>
             <td className="px-3 py-1.5">{log.rowsSkipped ?? "—"}</td>
+            <td className="px-3 py-1.5">{log.rowsDeleted ?? "—"}</td>
             <td className="px-3 py-1.5 max-w-[200px]">
               {log.error ? (
                 <span
@@ -646,6 +651,9 @@ function buildCreatePayload(formData) {
     refreshFreqMinutes: Number(formData.refreshFreqMinutes) || 60,
     workspaceId: Number(formData.workspaceId),
     active: formData.active,
+    trackDeletions: formData.trackDeletions,
+    reconcileEveryNRuns: Number(formData.reconcileEveryNRuns) || 10,
+    softDeleteColumn: formData.softDeleteColumn || undefined,
   };
 }
 
