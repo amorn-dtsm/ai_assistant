@@ -66,7 +66,13 @@ function databaseConnectorEndpoints(app) {
     async (request, response) => {
       try {
         const body = reqBody(request);
-        const { connector, error } = await DatabaseConnector.create(body);
+        // Pass through deletion tracking fields; model validates them
+        const { connector, error } = await DatabaseConnector.create({
+          ...body,
+          trackDeletions: body.trackDeletions,
+          reconcileEveryNRuns: body.reconcileEveryNRuns,
+          softDeleteColumn: body.softDeleteColumn,
+        });
         if (error) {
           response.status(400).json({ connector: null, error });
           return;
@@ -135,6 +141,9 @@ function databaseConnectorEndpoints(app) {
           "refreshFreqMinutes",
           "batchSize",
           "active",
+          "trackDeletions",
+          "reconcileEveryNRuns",
+          "softDeleteColumn",
         ];
 
         for (const field of allowedFields) {
@@ -246,7 +255,7 @@ function databaseConnectorEndpoints(app) {
     ADMIN_MIDDLEWARE,
     async (request, response) => {
       try {
-        const { engine, connectionConfig, query } = reqBody(request);
+        const { engine, connectionConfig, query, softDeleteColumn } = reqBody(request);
 
         // Validate engine
         if (!DatabaseConnector.supportedEngines.includes(engine)) {
@@ -310,7 +319,13 @@ function databaseConnectorEndpoints(app) {
         const sampleRows = queryResult.rows || [];
         const columns = sampleRows.length > 0 ? Object.keys(sampleRows[0]) : [];
 
-        response.status(200).json({ success: true, columns, sampleRows });
+        // Check if softDeleteColumn is present in the preview columns
+        const responseBody = { success: true, columns, sampleRows };
+        if (softDeleteColumn && !columns.includes(softDeleteColumn)) {
+          responseBody.warning = `softDeleteColumn '${softDeleteColumn}' not present in query result columns — soft-delete detection will be inert`;
+        }
+
+        response.status(200).json(responseBody);
       } catch (e) {
         console.error("POST /database-connectors/test", e.message);
         response.status(400).json({ success: false, error: e.message });
