@@ -5,6 +5,7 @@ const mockPrismaUpdate = jest.fn().mockResolvedValue({});
 const mockPrismaFindUnique = jest
   .fn()
   .mockResolvedValue({ id: 1, slug: "test-ws" });
+const mockPrismaWsDocsFindMany = jest.fn().mockResolvedValue([]);
 
 jest.mock("../../../utils/prisma", () => ({
   database_connectors: {
@@ -13,6 +14,9 @@ jest.mock("../../../utils/prisma", () => ({
   },
   workspaces: {
     findUnique: (...args) => mockPrismaFindUnique(...args),
+  },
+  workspace_documents: {
+    findMany: (...args) => mockPrismaWsDocsFindMany(...args),
   },
   database_connector_sync_logs: {
     create: jest.fn().mockResolvedValue({ id: 100 }),
@@ -41,10 +45,12 @@ jest.mock(
   })
 );
 
-// ── Mock: upsertRowDocument ─────────────────────────────────────────
+// ── Mock: upsertRowDocument / removeRowDocument ─────────────────────
 const mockUpsertRowDocument = jest.fn();
+const mockRemoveRowDocument = jest.fn();
 jest.mock("../../../utils/DatabaseConnectors/ingestion", () => ({
   upsertRowDocument: (...args) => mockUpsertRowDocument(...args),
+  removeRowDocument: (...args) => mockRemoveRowDocument(...args),
 }));
 
 // ── Mock: Document model (transitive dep of ingestion) ──────────────
@@ -149,8 +155,10 @@ beforeEach(() => {
     .mockResolvedValue({ id: 100 });
 
   mockUpsertRowDocument.mockResolvedValue({ status: "added" });
+  mockRemoveRowDocument.mockResolvedValue({ success: true, removed: true });
   mockPrismaFindUnique.mockResolvedValue({ id: 1, slug: "test-ws" });
   mockPrismaUpdate.mockResolvedValue({});
+  mockPrismaWsDocsFindMany.mockResolvedValue([]);
 });
 
 // ═════════════════════════════════════════════════════════════════════
@@ -246,8 +254,8 @@ describe("syncEngine", () => {
 
       await syncConnector(1);
 
-      // 2 batches → 2 intermediate cursor updates
-      expect(mockPrismaUpdate).toHaveBeenCalledTimes(2);
+      // 2 batches → 2 cursor updates + 1 runsSinceReconcile update = 3
+      expect(mockPrismaUpdate).toHaveBeenCalledTimes(3);
 
       // First cursor update should use batch1's last row
       const firstCall = mockPrismaUpdate.mock.calls[0][0];
@@ -462,6 +470,268 @@ describe("syncEngine", () => {
           id: String(batch[1].id),
         },
       });
+    });
+  });
+
+  // ── Soft-delete tests ────────────────────────────────────────────
+  describe("soft-delete", () => {
+    // TEST SD-1: truthy deleted_at → removeRowDocument, NOT upsert
+    it("calls removeRowDocument for rows with truthy softDeleteColumn", async () => {
+      const connector = makeConnector({ softDeleteColumn: "deleted_at" });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      const rows = [
+        { id: 1, updated_at: "2025-01-01T00:00:01Z", description: "Item 1", category: "A", deleted_at: "2025-06-01" },
+      ];
+      mockRunQuery
+        .mockResolvedValueOnce({ rows, count: 1, error: null });
+
+      const result = await syncConnector(1);
+
+      expect(result.success).toBe(true);
+      expect(result.counts.rowsDeleted).toBe(1);
+      expect(result.counts.rowsAdded).toBe(0);
+      expect(mockRemoveRowDocument).toHaveBeenCalledTimes(1);
+      expect(mockRemoveRowDocument).toHaveBeenCalledWith({
+        workspace: { id: 1, slug: "test-ws" },
+        docPath: "db-connectors/1/row-1.json",
+      });
+      expect(mockUpsertRowDocument).not.toHaveBeenCalled();
+      // Cursor still advances past the soft-deleted row
+      expect(mockPrismaUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            lastSyncCursorId: "1",
+          }),
+        })
+      );
+    });
+
+    // TEST SD-2: softDeleteColumn unset → all rows upserted
+    it("upserts all rows when softDeleteColumn is not set", async () => {
+      const connector = makeConnector({ softDeleteColumn: null });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      const rows = [
+        { id: 1, updated_at: "2025-01-01T00:00:01Z", description: "Item 1", category: "A", deleted_at: "2025-06-01" },
+      ];
+      mockRunQuery.mockResolvedValueOnce({ rows, count: 1, error: null });
+
+      const result = await syncConnector(1);
+
+      expect(result.success).toBe(true);
+      expect(result.counts.rowsAdded).toBe(1);
+      expect(mockUpsertRowDocument).toHaveBeenCalledTimes(1);
+      expect(mockRemoveRowDocument).not.toHaveBeenCalled();
+    });
+
+    // TEST SD-3: row[col] === undefined → treated as not-deleted, upserted
+    it("upserts row when softDeleteColumn value is undefined (column not selected)", async () => {
+      const connector = makeConnector({ softDeleteColumn: "deleted_at" });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      // Row does NOT have deleted_at key at all
+      const rows = [
+        { id: 1, updated_at: "2025-01-01T00:00:01Z", description: "Item 1", category: "A" },
+      ];
+      mockRunQuery.mockResolvedValueOnce({ rows, count: 1, error: null });
+
+      const result = await syncConnector(1);
+
+      expect(result.success).toBe(true);
+      expect(result.counts.rowsAdded).toBe(1);
+      expect(mockUpsertRowDocument).toHaveBeenCalledTimes(1);
+      expect(mockRemoveRowDocument).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Reconciliation tests ──────────────────────────────────────────
+  describe("reconciliation", () => {
+    // TEST R-1: Reconciliation runs only when counter threshold reached; counter resets
+    it("runs reconciliation when counter reaches threshold and resets counter", async () => {
+      const connector = makeConnector({
+        trackDeletions: true,
+        reconcileEveryNRuns: 3,
+        runsSinceReconcile: 2,
+        softDeleteColumn: null,
+      });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      // Batch loop: 1 row → done
+      const rows = makeRows(1, 1);
+      mockRunQuery
+        .mockResolvedValueOnce({ rows, count: 1, error: null })
+        // Reconciliation IDs query: source has id 1
+        .mockResolvedValueOnce({ rows: [{ id: 1 }], error: null });
+
+      // Synced docs: only row-1 → no candidates
+      mockPrismaWsDocsFindMany.mockResolvedValue([
+        { docpath: "db-connectors/1/row-1.json" },
+      ]);
+
+      const result = await syncConnector(1);
+
+      expect(result.success).toBe(true);
+      // getDBClient called 2x: 1 for batch + 1 for reconciliation
+      expect(getDBClient).toHaveBeenCalledTimes(2);
+      // Counter reset to 0 (the LAST prisma update for runsSinceReconcile)
+      const counterUpdates = mockPrismaUpdate.mock.calls.filter(
+        (call) => call[0]?.data?.runsSinceReconcile !== undefined
+      );
+      expect(counterUpdates.length).toBeGreaterThan(0);
+      const lastCounterUpdate = counterUpdates[counterUpdates.length - 1];
+      expect(lastCounterUpdate[0].data.runsSinceReconcile).toBe(0);
+    });
+
+    // TEST R-2: Reconciliation diff — source [1,2], docs [1,2,3] → doc 3 removed
+    it("removes docs not present in source IDs", async () => {
+      const connector = makeConnector({
+        trackDeletions: true,
+        reconcileEveryNRuns: 1,
+        runsSinceReconcile: 0,
+        softDeleteColumn: null,
+      });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      // Batch loop: 1 row
+      mockRunQuery
+        .mockResolvedValueOnce({ rows: makeRows(1, 1), count: 1, error: null })
+        // Reconciliation IDs query: source has ids 1 and 2
+        .mockResolvedValueOnce({ rows: [{ id: 1 }, { id: 2 }], error: null });
+
+      // Synced docs: row-1, row-2, row-3 → row-3 is orphaned
+      mockPrismaWsDocsFindMany.mockResolvedValue([
+        { docpath: "db-connectors/1/row-1.json" },
+        { docpath: "db-connectors/1/row-2.json" },
+        { docpath: "db-connectors/1/row-3.json" },
+      ]);
+
+      const result = await syncConnector(1);
+
+      expect(result.success).toBe(true);
+      // removeRowDocument called once for reconciliation (row-3)
+      expect(mockRemoveRowDocument).toHaveBeenCalledWith({
+        workspace: { id: 1, slug: "test-ws" },
+        docPath: "db-connectors/1/row-3.json",
+      });
+      expect(result.counts.rowsDeleted).toBe(1);
+    });
+
+    // TEST R-3: IDs-query error → deletion phase skipped, warning, counter NOT reset
+    it("skips reconciliation on query error, records warning, keeps counter", async () => {
+      const connector = makeConnector({
+        trackDeletions: true,
+        reconcileEveryNRuns: 1,
+        runsSinceReconcile: 0,
+        softDeleteColumn: null,
+      });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      // Batch loop: 1 row
+      mockRunQuery
+        .mockResolvedValueOnce({ rows: makeRows(1, 1), count: 1, error: null })
+        // Reconciliation IDs query FAILS
+        .mockResolvedValueOnce({ rows: null, error: "connection timeout" });
+
+      const result = await syncConnector(1);
+
+      // Run is still success (incremental results stand)
+      expect(result.success).toBe(true);
+      // removeRowDocument NOT called for reconciliation
+      expect(mockRemoveRowDocument).not.toHaveBeenCalled();
+      // Sync log has warning in error field
+      expect(DatabaseConnectorSyncLog.finish).toHaveBeenCalledWith(
+        100,
+        expect.objectContaining({
+          status: "success",
+          error: expect.stringContaining("reconciliation skipped"),
+        })
+      );
+      // Counter NOT reset — persisted as nextCounter (1)
+      const counterUpdates = mockPrismaUpdate.mock.calls.filter(
+        (call) => call[0]?.data?.runsSinceReconcile !== undefined
+      );
+      const lastCounterUpdate = counterUpdates[counterUpdates.length - 1];
+      expect(lastCounterUpdate[0].data.runsSinceReconcile).toBe(1);
+    });
+
+    // TEST R-4: Threshold abort — candidates > max(10, 20%)
+    it("aborts reconciliation when candidates exceed safety threshold", async () => {
+      const connector = makeConnector({
+        trackDeletions: true,
+        reconcileEveryNRuns: 1,
+        runsSinceReconcile: 0,
+        softDeleteColumn: null,
+      });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      // Batch loop: 1 row
+      mockRunQuery
+        .mockResolvedValueOnce({ rows: makeRows(1, 1), count: 1, error: null })
+        // Reconciliation IDs query: source has 45 ids (1..45)
+        .mockResolvedValueOnce({
+          rows: Array.from({ length: 45 }, (_, i) => ({ id: i + 1 })),
+          error: null,
+        });
+
+      // Synced docs: 60 docs (ids 1..60)
+      // threshold = max(10, ceil(60 * 0.2)) = max(10, 12) = 12
+      // candidates = 15 (ids 46..60 not in source) > 12 → ABORT
+      mockPrismaWsDocsFindMany.mockResolvedValue(
+        Array.from({ length: 60 }, (_, i) => ({
+          docpath: `db-connectors/1/row-${i + 1}.json`,
+        }))
+      );
+
+      const result = await syncConnector(1);
+
+      expect(result.success).toBe(true);
+      // removeRowDocument NOT called — threshold abort
+      expect(mockRemoveRowDocument).not.toHaveBeenCalled();
+      // Warning recorded in sync log
+      expect(DatabaseConnectorSyncLog.finish).toHaveBeenCalledWith(
+        100,
+        expect.objectContaining({
+          status: "success",
+          error: expect.stringContaining("reconciliation aborted"),
+          error: expect.stringContaining("exceeds safety threshold"),
+        })
+      );
+      // Counter NOT reset
+      const counterUpdates = mockPrismaUpdate.mock.calls.filter(
+        (call) => call[0]?.data?.runsSinceReconcile !== undefined
+      );
+      const lastCounterUpdate = counterUpdates[counterUpdates.length - 1];
+      expect(lastCounterUpdate[0].data.runsSinceReconcile).toBe(1);
+    });
+
+    // TEST R-5: Sanitization alignment — source id "a b" matches doc row-a_b.json
+    it("aligns sanitization so source id 'a b' matches doc row-a_b.json", async () => {
+      const connector = makeConnector({
+        trackDeletions: true,
+        reconcileEveryNRuns: 1,
+        runsSinceReconcile: 0,
+        softDeleteColumn: null,
+      });
+      DatabaseConnector.get.mockResolvedValue(connector);
+
+      // Batch loop: 1 row
+      mockRunQuery
+        .mockResolvedValueOnce({ rows: makeRows(1, 1), count: 1, error: null })
+        // Reconciliation: source has id "a b" (with space)
+        .mockResolvedValueOnce({ rows: [{ id: "a b" }], error: null });
+
+      // Synced docs: row-a_b.json (space → underscore by rowDocPath sanitization)
+      mockPrismaWsDocsFindMany.mockResolvedValue([
+        { docpath: "db-connectors/1/row-a_b.json" },
+      ]);
+
+      const result = await syncConnector(1);
+
+      expect(result.success).toBe(true);
+      // No false-positive delete — "a b" sanitizes to "a_b" matching the doc
+      expect(mockRemoveRowDocument).not.toHaveBeenCalled();
+      expect(result.counts.rowsDeleted).toBe(0);
     });
   });
 

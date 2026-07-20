@@ -9,8 +9,9 @@ const {
   extractRowMetadata,
   computeNextCursor,
   rowDocPath,
+  validateIdentifier,
 } = require("./index");
-const { upsertRowDocument } = require("./ingestion");
+const { upsertRowDocument, removeRowDocument } = require("./ingestion");
 const {
   getDBClient,
 } = require("../agents/aibitat/plugins/sql-agent/SQLConnectors");
@@ -109,6 +110,7 @@ async function syncConnector(connectorId) {
     rowsAdded: 0,
     rowsUpdated: 0,
     rowsSkipped: 0,
+    rowsDeleted: 0,
   };
 
   // Track the last-known-good cursor (what's already persisted on the row)
@@ -172,9 +174,42 @@ async function syncConnector(connectorId) {
           continue;
         }
 
-        const metadata = extractRowMetadata(row, metadataColumns);
         const idValue = row[connector.idColumn];
         const docPath = rowDocPath(connector.id, idValue);
+
+        // ── Soft-delete check ──────────────────────────────────
+        // If softDeleteColumn is set and the row's value is truthy,
+        // remove the document instead of upserting.
+        // undefined (column not in SELECT) → treated as not-deleted.
+        if (
+          connector.softDeleteColumn &&
+          typeof connector.softDeleteColumn === "string" &&
+          row[connector.softDeleteColumn] !== undefined &&
+          row[connector.softDeleteColumn]
+        ) {
+          try {
+            const removeResult = await removeRowDocument({
+              workspace,
+              docPath,
+            });
+            if (removeResult.success) {
+              counts.rowsDeleted++;
+            } else {
+              console.error(
+                `syncEngine: row ${idValue} soft-delete failed: ${removeResult.error}`
+              );
+              counts.rowsSkipped++;
+            }
+          } catch (rowError) {
+            console.error(
+              `syncEngine: row ${idValue} soft-delete error: ${rowError.message}`
+            );
+            counts.rowsSkipped++;
+          }
+          continue;
+        }
+
+        const metadata = extractRowMetadata(row, metadataColumns);
         const title = `Row ${idValue}`;
 
         try {
@@ -227,6 +262,121 @@ async function syncConnector(connectorId) {
       if (rows.length < batchSize) break;
     }
 
+    // ── Reconciliation phase (same lock held) ─────────────────────
+    const nextCounter = (connector.runsSinceReconcile || 0) + 1;
+    const shouldReconcile =
+      connector.trackDeletions &&
+      nextCounter >= connector.reconcileEveryNRuns;
+    let reconcileWarning = null;
+
+    if (shouldReconcile) {
+      try {
+        // Defense-in-depth: validate idColumn (model already guarantees it)
+        if (!validateIdentifier(connector.idColumn)) {
+          throw new Error(
+            `Invalid idColumn identifier: "${connector.idColumn}"`
+          );
+        }
+
+        // IDs-only query — full scan, no cursor/WHERE needed
+        const reconcileSql = translatePlaceholders(
+          `SELECT ${connector.idColumn} FROM ( ${connector.query} ) AS __src`,
+          connector.engine
+        );
+
+        const reconcileClient = getDBClient(connector.engine, {
+          connectionString,
+        });
+        const reconcileResult = await reconcileClient.runQuery(
+          reconcileSql,
+          []
+        );
+
+        if (reconcileResult.error) {
+          throw new Error(reconcileResult.error);
+        }
+
+        // Build source-ID set with EXACT same sanitization as rowDocPath
+        const sourceIdSet = new Set();
+        for (const row of reconcileResult.rows) {
+          const rawId = row[connector.idColumn];
+          const sanitized = String(rawId).replace(/[^A-Za-z0-9_-]/g, "_");
+          sourceIdSet.add(sanitized);
+        }
+
+        // Fetch all synced docs for this connector
+        const prefix = `db-connectors/${connector.id}/row-`;
+        const syncedDocs = await prisma.workspace_documents.findMany({
+          where: {
+            workspaceId: connector.workspaceId,
+            docpath: { startsWith: prefix },
+          },
+        });
+
+        // Diff: docs whose sanitized row-id is NOT in the source set
+        const candidates = [];
+        for (const doc of syncedDocs) {
+          const sanitizedId = doc.docpath.slice(prefix.length).replace(/\.json$/, "");
+          if (!sourceIdSet.has(sanitizedId)) {
+            candidates.push(doc);
+          }
+        }
+
+        // Safety threshold: max(10, ceil(20% of total docs))
+        const totalDocs = syncedDocs.length;
+        const maxAllowed = Math.max(10, Math.ceil(totalDocs * 0.2));
+
+        if (candidates.length > maxAllowed) {
+          // ABORT — too many deletions, likely a query problem
+          reconcileWarning = `reconciliation aborted: would delete ${candidates.length} of ${totalDocs} docs — exceeds safety threshold`;
+          await prisma.database_connectors.update({
+            where: { id },
+            data: { runsSinceReconcile: nextCounter },
+          });
+        } else {
+          // Delete each candidate
+          for (const doc of candidates) {
+            try {
+              const delResult = await removeRowDocument({
+                workspace,
+                docPath: doc.docpath,
+              });
+              if (delResult.success) {
+                counts.rowsDeleted++;
+              } else {
+                console.error(
+                  `syncEngine: reconcile delete failed for ${doc.docpath}: ${delResult.error}`
+                );
+              }
+            } catch (delError) {
+              console.error(
+                `syncEngine: reconcile delete error for ${doc.docpath}: ${delError.message}`
+              );
+            }
+          }
+
+          // Reset counter after successful reconciliation
+          await prisma.database_connectors.update({
+            where: { id },
+            data: { runsSinceReconcile: 0 },
+          });
+        }
+      } catch (reconcileError) {
+        // Query error or other failure → skip deletion phase entirely
+        reconcileWarning = `reconciliation skipped: ${reconcileError.message}`;
+        await prisma.database_connectors.update({
+          where: { id },
+          data: { runsSinceReconcile: nextCounter },
+        });
+      }
+    } else {
+      // No reconciliation this run — persist incremented counter
+      await prisma.database_connectors.update({
+        where: { id },
+        data: { runsSinceReconcile: nextCounter },
+      });
+    }
+
     // ── Success ─────────────────────────────────────────────────────
     await DatabaseConnector.releaseLock(id, {
       status: "success",
@@ -238,6 +388,7 @@ async function syncConnector(connectorId) {
         status: "success",
         counts,
         cursorAfter: finalCursor ? JSON.stringify(finalCursor) : null,
+        error: reconcileWarning || null,
       });
     }
 
