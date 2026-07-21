@@ -63,8 +63,11 @@ async function runOcr({ workspace, user, threadId, file, sourceId }) {
       status: "success",
       sourceId,
       filename: originalname,
-      pages,
-      ...(language && { language }),
+      payload: {
+        text: extractedText,
+        pages,
+        ...(language && { language }),
+      },
       downloads: { txt: true },
     };
 

@@ -6,7 +6,7 @@ import PromptInput, {
   PROMPT_INPUT_ID,
 } from "./PromptInput";
 import Workspace from "@/models/workspace";
-import AiTools from "@/models/aiTools";
+import AiTools, { getErrorKeyForStatus } from "@/models/aiTools";
 import handleChat, { ABORT_STREAM_EVENT } from "@/utils/chat";
 import { isMobile } from "react-device-detect";
 import { SidebarMobileHeader } from "../../Sidebar";
@@ -69,6 +69,8 @@ export default function ChatContainer({
   const [pendingTool, setPendingTool] = useState(null);
   const [enabledTools, setEnabledTools] = useState([]);
   const toolAbortRef = useRef(null);
+  // Track if a tool request is in flight to prevent double-submit
+  const [toolRequestInFlight, setToolRequestInFlight] = useState(false);
 
   const isEmpty =
     chatHistory.length === 0 && !sessionStorage.getItem(PENDING_HOME_MESSAGE);
@@ -191,6 +193,11 @@ export default function ChatContainer({
     // When pendingTool is set, bypass the normal multiplexStream flow entirely.
     // POST directly to the ai-tools endpoint and manage optimistic chat entries.
     if (pendingTool) {
+      // Double-submit guard: prevent sending while a tool request is in flight
+      if (toolRequestInFlight) {
+        return;
+      }
+
       const { tool, file, clientRequestId } = pendingTool;
       const toolLabel = TOOL_LABELS[tool] || tool;
       const userContent = `[${toolLabel}] ${file.name}`;
@@ -198,15 +205,18 @@ export default function ChatContainer({
       // Optimistic chat entries — note: assistant entry intentionally omits
       // `userMessage` so the fetchReply effect (which triggers multiplexStream)
       // will bail out even if loadingResponse is true.
+      // Thread-bound: include threadSlug in optimistic entry for proper filtering
+      // if user navigates to another thread mid-flight.
       setChatHistory((prev) => [
         ...prev,
-        { content: userContent, role: "user", _toolClientId: clientRequestId },
+        { content: userContent, role: "user", _toolClientId: clientRequestId, threadSlug: activeThreadSlug },
         {
           content: "",
           role: "assistant",
           type: "toolResult",
           pending: true,
           clientRequestId,
+          threadSlug: activeThreadSlug,
           animate: true,
         },
       ]);
@@ -218,6 +228,7 @@ export default function ChatContainer({
 
       const ctrl = new AbortController();
       toolAbortRef.current = ctrl;
+      setToolRequestInFlight(true);
 
       try {
         const result = await AiTools.run(
@@ -244,15 +255,26 @@ export default function ChatContainer({
       } catch (e) {
         if (e.name === "AbortError") {
           // User cancelled or unmount — remove optimistic entries.
+          // Filter by both clientRequestId AND threadSlug to avoid cross-thread cleanup.
           setChatHistory((prev) =>
             prev.filter(
               (msg) =>
-                msg.clientRequestId !== clientRequestId &&
-                msg._toolClientId !== clientRequestId
+                (msg.clientRequestId !== clientRequestId ||
+                  msg.threadSlug !== activeThreadSlug) &&
+                (msg._toolClientId !== clientRequestId ||
+                  msg.threadSlug !== activeThreadSlug)
             )
           );
           return;
         }
+
+        // Map HTTP status codes to user-friendly error messages
+        const errorKey = e.httpStatus
+          ? getErrorKeyForStatus(e.httpStatus)
+          : "chat_window.aiTools.errors.upstream";
+        const errorMessage = t(errorKey, e.message);
+        showToast(errorMessage, "error");
+
         // Replace optimistic assistant with error entry (server persists error
         // rows so reloading stays consistent).
         setChatHistory((prev) =>
@@ -263,14 +285,15 @@ export default function ChatContainer({
                   pending: false,
                   animate: false,
                   error: true,
-                  content: e.message,
-                  toolResult: { tool, error: e.message, status: "error" },
+                  content: errorMessage,
+                  toolResult: { tool, error: errorMessage, status: "error" },
                 }
               : msg
           )
         );
       } finally {
         toolAbortRef.current = null;
+        setToolRequestInFlight(false);
       }
       return;
     }
@@ -651,6 +674,7 @@ export default function ChatContainer({
                     onSelectTool={handleSelectTool}
                     onClearTool={handleClearTool}
                     enabledTools={enabledTools}
+                    toolRequestInFlight={toolRequestInFlight}
                   />
                   <QuickActions
                     hasAvailableWorkspace={!!workspace}
@@ -720,6 +744,7 @@ export default function ChatContainer({
                     onSelectTool={handleSelectTool}
                     onClearTool={handleClearTool}
                     enabledTools={enabledTools}
+                    toolRequestInFlight={toolRequestInFlight}
                   />
               </div>
             </div>

@@ -11,6 +11,27 @@ const TOOL_ENDPOINT = {
   searchable_pdf: "searchable-pdf",
 };
 
+/**
+ * Maps HTTP status codes to i18n error keys for AI tool operations.
+ * Used to provide user-friendly error messages via toast notifications.
+ */
+const HTTP_ERROR_MAP = {
+  400: "chat_window.aiTools.errors.invalidType",
+  413: "chat_window.aiTools.errors.fileTooLarge",
+  503: "chat_window.aiTools.errors.notConfigured",
+  504: "chat_window.aiTools.errors.timeout",
+  502: "chat_window.aiTools.errors.upstream",
+};
+
+/**
+ * Get the i18n error key for a given HTTP status code.
+ * @param {number} status - HTTP status code
+ * @returns {string} i18n key, or generic "upstream" if unmapped
+ */
+export function getErrorKeyForStatus(status) {
+  return HTTP_ERROR_MAP[status] || "chat_window.aiTools.errors.upstream";
+}
+
 const AiTools = {
   /**
    * Fetch which AI tools are enabled/configured for this workspace.
@@ -68,7 +89,10 @@ const AiTools = {
 
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.error || body.message || `Tool request failed (${res.status})`);
+      const error = new Error(body.error || body.message || `Tool request failed (${res.status})`);
+      // Attach HTTP status code for error mapping in the caller
+      error.httpStatus = res.status;
+      throw error;
     }
 
     return res.json();

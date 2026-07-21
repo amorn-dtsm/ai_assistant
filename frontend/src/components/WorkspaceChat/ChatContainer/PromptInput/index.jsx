@@ -33,6 +33,7 @@ const MAX_EDIT_STACK_SIZE = 100;
  * @param {boolean} [props.centered] - renders in centered layout mode (for home page)
  * @param {string} [props.workspaceSlug] - workspace slug for home page context
  * @param {string} [props.threadSlug] - thread slug for home page context
+ * @param {boolean} [props.toolRequestInFlight] - disables send while tool request is in flight
  */
 export default function PromptInput({
   workspace = {},
@@ -47,6 +48,7 @@ export default function PromptInput({
   onSelectTool = () => {},
   onClearTool = () => {},
   enabledTools = [],
+  toolRequestInFlight = false,
 }) {
   const { t } = useTranslation();
   const { showAgentCommand = true } = workspace ?? {};
@@ -406,11 +408,12 @@ export default function PromptInput({
                     <StopGenerationButton />
                   ) : (
                     <SendPromptButton
-                      formRef={formRef}
-                      promptInput={promptInput}
-                      isDisabled={isDisabled}
-                      hasPendingTool={!!pendingTool}
-                    />
+                       formRef={formRef}
+                       promptInput={promptInput}
+                       isDisabled={isDisabled}
+                       hasPendingTool={!!pendingTool}
+                       toolRequestInFlight={toolRequestInFlight}
+                     />
                   )}
                 </div>
               </div>
@@ -501,9 +504,9 @@ function ToolsButton({
   );
 }
 
-function SendPromptButton({ formRef, promptInput, isDisabled, hasPendingTool = false }) {
+function SendPromptButton({ formRef, promptInput, isDisabled, hasPendingTool = false, toolRequestInFlight = false }) {
   const { t } = useTranslation();
-  const canSend = (promptInput.trim().length > 0 || hasPendingTool) && !isDisabled;
+  const canSend = (promptInput.trim().length > 0 || hasPendingTool) && !isDisabled && !toolRequestInFlight;
 
   return (
     <>

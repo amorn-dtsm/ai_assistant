@@ -13,6 +13,7 @@ import StatusResponse from "./StatusResponse";
 import ToolApprovalRequest from "./ToolApprovalRequest";
 import ClarifyingQuestionCard from "./ClarifyingQuestion";
 import FileDownloadCard from "./FileDownloadCard";
+import ToolResultCard from "./ToolResultCard";
 import { useManageWorkspaceModal } from "../../../Modals/ManageWorkspace";
 import ManageWorkspace from "../../../Modals/ManageWorkspace";
 import { ArrowDown } from "@phosphor-icons/react";
@@ -348,6 +349,16 @@ function buildMessages({
 
     if (props.type === "rechartVisualize" && !!props.content) {
       acc.push(<Chartable key={props.uuid} props={props} />);
+    } else if (props.type === "toolResult") {
+      acc.push(
+        <ToolResultCard
+          key={props.uuid || `tool-result-${props.clientRequestId}`}
+          toolResult={props.toolResult}
+          content={props.content}
+          pending={props.pending}
+          workspaceSlug={workspace?.slug}
+        />
+      );
     } else if (props.type === "fileDownloadCard" && !!props.content) {
       acc.push(<FileDownloadCard key={props.uuid} props={props} />);
     } else if (isLastBotReply && props.animate) {
