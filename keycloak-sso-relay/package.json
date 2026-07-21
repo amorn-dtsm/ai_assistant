@@ -1,0 +1,19 @@
+{
+  "name": "keycloak-sso-relay",
+  "version": "1.0.0",
+  "description": "OIDC relay that bridges Keycloak logins to AnythingLLM's Simple SSO passthrough.",
+  "type": "module",
+  "private": true,
+  "main": "index.js",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "openid-client": "^6.1.7"
+  }
+}

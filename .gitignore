@@ -1,5 +1,6 @@
 v-env
 .env
+.env.relay
 !.env.example
 
 node_modules
@@ -10,3 +11,6 @@ aws_cf_deploy_anything_llm.json
 yarn.lock
 *.bak
 .idea
+
+# Local agent workspace (plans, notepads, evidence — may contain secrets/logs)
+.sisyphus/
