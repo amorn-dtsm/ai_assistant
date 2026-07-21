@@ -7,6 +7,7 @@ import {
   Scan,
 } from "@phosphor-icons/react";
 import { AI_TOOL_IDS, AI_TOOL_CONFIG } from "@/utils/aiTools/constants";
+import showToast from "@/utils/toast";
 
 const MODE_OPTIONS = [
   {
@@ -91,6 +92,7 @@ export default function AttachModePopup({
   setShowing,
   onSelectMode = () => {},
   enabledTools = [AI_TOOL_IDS.OCR, AI_TOOL_IDS.XRAY, AI_TOOL_IDS.SEARCHABLE_PDF],
+  hasPendingTool = false,
 }) {
   const { t } = useTranslation();
   const popoverRef = useRef(null);
@@ -118,6 +120,17 @@ export default function AttachModePopup({
   );
 
   function handleOptionClick(option) {
+    // Block mixing: if a tool file is already pending, reject both normal
+    // attach and additional tool picks with a single-file toast.
+    if (hasPendingTool) {
+      showToast(
+        t("chat_window.aiTools.errors.singleFileOnly", "Only 1 file per tool action"),
+        "error"
+      );
+      close();
+      return;
+    }
+
     if (option.tool === null) {
       // Normal attach — trigger the existing hidden file uploader
       close();

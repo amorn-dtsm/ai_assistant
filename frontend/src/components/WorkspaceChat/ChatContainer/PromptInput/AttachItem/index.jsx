@@ -19,6 +19,9 @@ import AttachModePopup from "./AttachModePopup";
 export default function AttachItem({
   workspaceSlug = null,
   workspaceThreadSlug = null,
+  onSelectTool = () => {},
+  enabledTools = [],
+  hasPendingTool = false,
 }) {
   const { t } = useTranslation();
   const { theme } = useTheme();
@@ -120,6 +123,9 @@ export default function AttachItem({
         <AttachModePopup
           showing={showPopup}
           setShowing={setShowPopup}
+          onSelectMode={onSelectTool}
+          enabledTools={enabledTools}
+          hasPendingTool={hasPendingTool}
         />
       </div>
       {showTooltip && (

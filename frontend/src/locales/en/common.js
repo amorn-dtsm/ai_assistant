@@ -1891,6 +1891,11 @@ const TRANSLATIONS = {
         searchablePdf: "Make Searchable PDF",
         ocr: "OCR",
       },
+      chip: {
+        ocr: "OCR",
+        xray: "X-ray",
+        searchable_pdf: "Searchable PDF",
+      },
       card: {
         ocrTitle: "OCR Result",
         xrayTitle: "X-ray Analysis",

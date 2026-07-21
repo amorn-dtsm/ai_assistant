@@ -45,6 +45,7 @@ const {
   googleAgentSkillEndpoints,
 } = require("./endpoints/utils/googleAgentSkillEndpoints");
 const { memoryEndpoints } = require("./endpoints/memory");
+const { aiToolsEndpoints } = require("./endpoints/aiTools");
 const { httpLogger } = require("./middleware/httpLogger");
 const app = express();
 const apiRouter = express.Router();
@@ -83,6 +84,7 @@ extensionEndpoints(apiRouter);
 workspaceEndpoints(apiRouter);
 workspaceThreadEndpoints(apiRouter);
 chatEndpoints(apiRouter);
+aiToolsEndpoints(apiRouter);
 adminEndpoints(apiRouter);
 modelRouterEndpoints(apiRouter);
 inviteEndpoints(apiRouter);

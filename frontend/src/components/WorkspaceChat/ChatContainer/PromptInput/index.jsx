@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import debounce from "lodash.debounce";
-import { ArrowUp, At } from "@phosphor-icons/react";
+import { ArrowUp, At, X } from "@phosphor-icons/react";
 import StopGenerationButton from "./StopGenerationButton";
 import SpeechToText from "./SpeechToText";
 import { Tooltip } from "react-tooltip";
@@ -18,6 +18,7 @@ import usePromptInputStorage from "@/hooks/usePromptInputStorage";
 import ToolsMenu, { TOOLS_MENU_KEYBOARD_EVENT } from "./ToolsMenu";
 import { useSearchParams } from "react-router-dom";
 import { useIsAgentSessionActive } from "@/utils/chat/agent";
+import ToolIntentChip from "./ToolIntentChip";
 
 export const PROMPT_INPUT_ID = "primary-prompt-input";
 export const PROMPT_INPUT_EVENT = "set_prompt_input";
@@ -42,6 +43,10 @@ export default function PromptInput({
   centered = false,
   workspaceSlug = null,
   threadSlug = null,
+  pendingTool = null,
+  onSelectTool = () => {},
+  onClearTool = () => {},
+  enabledTools = [],
 }) {
   const { t } = useTranslation();
   const { showAgentCommand = true } = workspace ?? {};
@@ -343,6 +348,12 @@ export default function PromptInput({
             />
             <div className="bg-zinc-800 light:bg-white green:bg-[#DDE9DF] light:border light:border-slate-300 green:border green:border-[#DEDEE0] rounded-[20px] pwa:rounded-3xl flex flex-col px-5 overflow-hidden">
               <AttachmentManager attachments={attachments} />
+              {pendingTool && (
+                <ToolIntentChip
+                  pendingTool={pendingTool}
+                  onClear={onClearTool}
+                />
+              )}
               <div className="flex items-center">
                 <textarea
                   id={PROMPT_INPUT_ID}
@@ -353,7 +364,7 @@ export default function PromptInput({
                     saveCurrentState();
                     handlePasteEvent(e);
                   }}
-                  required={true}
+                  required={!pendingTool}
                   onFocus={() => setFocused(true)}
                   onBlur={(e) => {
                     setFocused(false);
@@ -371,6 +382,9 @@ export default function PromptInput({
                     <AttachItem
                       workspaceSlug={workspaceSlug}
                       workspaceThreadSlug={threadSlug}
+                      onSelectTool={onSelectTool}
+                      enabledTools={enabledTools}
+                      hasPendingTool={!!pendingTool}
                     />
                     <AgentSessionButton
                       sendCommand={sendCommand}
@@ -395,6 +409,7 @@ export default function PromptInput({
                       formRef={formRef}
                       promptInput={promptInput}
                       isDisabled={isDisabled}
+                      hasPendingTool={!!pendingTool}
                     />
                   )}
                 </div>
@@ -486,17 +501,18 @@ function ToolsButton({
   );
 }
 
-function SendPromptButton({ formRef, promptInput, isDisabled }) {
+function SendPromptButton({ formRef, promptInput, isDisabled, hasPendingTool = false }) {
   const { t } = useTranslation();
+  const canSend = (promptInput.trim().length > 0 || hasPendingTool) && !isDisabled;
 
   return (
     <>
       <button
         ref={formRef}
         type="submit"
-        disabled={isDisabled || !promptInput.trim().length}
+        disabled={!canSend}
         className={`border-none flex justify-center items-center rounded-full w-8 h-8 transition-all ${
-          promptInput.trim().length && !isDisabled
+          canSend
             ? "cursor-pointer bg-white hover:bg-zinc-200 light:bg-slate-800 light:hover:bg-slate-600 green:bg-[#03713A] green:hover:bg-[#036735]"
             : "cursor-not-allowed bg-zinc-600 light:bg-slate-400 green:bg-[#B1D3C2]"
         }`}

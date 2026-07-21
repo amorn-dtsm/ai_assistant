@@ -6,6 +6,7 @@ import PromptInput, {
   PROMPT_INPUT_ID,
 } from "./PromptInput";
 import Workspace from "@/models/workspace";
+import AiTools from "@/models/aiTools";
 import handleChat, { ABORT_STREAM_EVENT } from "@/utils/chat";
 import { isMobile } from "react-device-detect";
 import { SidebarMobileHeader } from "../../Sidebar";
@@ -36,6 +37,15 @@ import WorkspaceModelPicker from "./WorkspaceModelPicker";
 import { ChatSidebarProvider } from "./ChatSidebar";
 import SourcesSidebar from "./SourcesSidebar";
 import MemoriesSidebar from "./MemoriesSidebar";
+import { AI_TOOL_IDS, AI_TOOL_CONFIG } from "@/utils/aiTools/constants";
+import showToast from "@/utils/toast";
+
+/** Short display labels for AI tool chat messages and intent chip. */
+const TOOL_LABELS = {
+  [AI_TOOL_IDS.OCR]: "OCR",
+  [AI_TOOL_IDS.XRAY]: "X-ray",
+  [AI_TOOL_IDS.SEARCHABLE_PDF]: "Searchable PDF",
+};
 
 export default function ChatContainer({
   workspace,
@@ -53,6 +63,12 @@ export default function ChatContainer({
   const pendingMessageChecked = useRef(false);
   const pendingResetRef = useRef(false);
   const activeThreadSlug = threadSlug;
+
+  // AI Tools state — tool intent (file + tool ID) set by AttachModePopup,
+  // consumed by the submit handler to bypass multiplexStream.
+  const [pendingTool, setPendingTool] = useState(null);
+  const [enabledTools, setEnabledTools] = useState([]);
+  const toolAbortRef = useRef(null);
 
   const isEmpty =
     chatHistory.length === 0 && !sessionStorage.getItem(PENDING_HOME_MESSAGE);
@@ -94,8 +110,172 @@ export default function ChatContainer({
     );
   }
 
+  // Fetch AI tool availability on workspace load.
+  useEffect(() => {
+    if (!workspace?.slug) return;
+    AiTools.status(workspace.slug).then((status) => {
+      const tools = [];
+      if (status.ocr) tools.push(AI_TOOL_IDS.OCR);
+      if (status.searchablePdf) tools.push(AI_TOOL_IDS.SEARCHABLE_PDF);
+      if (status.xray) tools.push(AI_TOOL_IDS.XRAY);
+      setEnabledTools(tools);
+    });
+  }, [workspace?.slug]);
+
+  // Abort in-flight tool request on unmount or workspace change.
+  useEffect(() => {
+    return () => {
+      toolAbortRef.current?.abort();
+      toolAbortRef.current = null;
+    };
+  }, [workspace?.slug]);
+
+  /**
+   * Callback from AttachModePopup when a tool + file is selected.
+   * Validates file constraints before setting pendingTool state.
+   */
+  const handleSelectTool = useCallback(
+    (toolId, file) => {
+      if (pendingTool) {
+        showToast(
+          t("chat_window.aiTools.errors.singleFileOnly", "Only 1 file per tool action"),
+          "error"
+        );
+        return;
+      }
+
+      const config = AI_TOOL_CONFIG[toolId];
+      if (!config) return;
+
+      // Size validation
+      if (file.size > config.maxSizeBytes) {
+        showToast(
+          t("chat_window.aiTools.errors.fileTooLarge", "File is too large") +
+            ` (max ${config.maxSizeLabel})`,
+          "error"
+        );
+        return;
+      }
+
+      // Type validation
+      const ext = `.${file.name.split(".").pop()?.toLowerCase()}`;
+      const acceptedExts = config.accept.split(",");
+      if (
+        !config.mimeTypes.includes(file.type) &&
+        !acceptedExts.includes(ext)
+      ) {
+        showToast(
+          t("chat_window.aiTools.errors.invalidType", "Invalid file type"),
+          "error"
+        );
+        return;
+      }
+
+      setPendingTool({
+        tool: toolId,
+        file,
+        clientRequestId: crypto.randomUUID(),
+      });
+    },
+    [pendingTool, t]
+  );
+
+  const handleClearTool = useCallback(() => {
+    setPendingTool(null);
+  }, []);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    // ── AI Tool submit path ──
+    // When pendingTool is set, bypass the normal multiplexStream flow entirely.
+    // POST directly to the ai-tools endpoint and manage optimistic chat entries.
+    if (pendingTool) {
+      const { tool, file, clientRequestId } = pendingTool;
+      const toolLabel = TOOL_LABELS[tool] || tool;
+      const userContent = `[${toolLabel}] ${file.name}`;
+
+      // Optimistic chat entries — note: assistant entry intentionally omits
+      // `userMessage` so the fetchReply effect (which triggers multiplexStream)
+      // will bail out even if loadingResponse is true.
+      setChatHistory((prev) => [
+        ...prev,
+        { content: userContent, role: "user", _toolClientId: clientRequestId },
+        {
+          content: "",
+          role: "assistant",
+          type: "toolResult",
+          pending: true,
+          clientRequestId,
+          animate: true,
+        },
+      ]);
+
+      setMessageEmit("");
+      setPendingTool(null);
+      clearPromptInputDraft(activeThreadSlug ?? workspace.slug);
+      if (listening) endSTTSession();
+
+      const ctrl = new AbortController();
+      toolAbortRef.current = ctrl;
+
+      try {
+        const result = await AiTools.run(
+          tool,
+          workspace.slug,
+          activeThreadSlug,
+          file,
+          { signal: ctrl.signal, clientRequestId }
+        );
+
+        // Replace optimistic assistant entry with real result.
+        setChatHistory((prev) =>
+          prev.map((msg) =>
+            msg.clientRequestId === clientRequestId
+              ? {
+                  ...msg,
+                  ...result,
+                  pending: false,
+                  animate: false,
+                }
+              : msg
+          )
+        );
+      } catch (e) {
+        if (e.name === "AbortError") {
+          // User cancelled or unmount — remove optimistic entries.
+          setChatHistory((prev) =>
+            prev.filter(
+              (msg) =>
+                msg.clientRequestId !== clientRequestId &&
+                msg._toolClientId !== clientRequestId
+            )
+          );
+          return;
+        }
+        // Replace optimistic assistant with error entry (server persists error
+        // rows so reloading stays consistent).
+        setChatHistory((prev) =>
+          prev.map((msg) =>
+            msg.clientRequestId === clientRequestId
+              ? {
+                  ...msg,
+                  pending: false,
+                  animate: false,
+                  error: true,
+                  content: e.message,
+                  toolResult: { tool, error: e.message, status: "error" },
+                }
+              : msg
+          )
+        );
+      } finally {
+        toolAbortRef.current = null;
+      }
+      return;
+    }
+
+    // ── Normal chat submit path (unchanged) ──
     const currentMessage =
       document.getElementById(PROMPT_INPUT_ID)?.value || "";
     if (!currentMessage) return false;
@@ -467,6 +647,10 @@ export default function ChatContainer({
                     sendCommand={sendCommand}
                     attachments={files}
                     centered={true}
+                    pendingTool={pendingTool}
+                    onSelectTool={handleSelectTool}
+                    onClearTool={handleClearTool}
+                    enabledTools={enabledTools}
                   />
                   <QuickActions
                     hasAvailableWorkspace={!!workspace}
@@ -526,13 +710,17 @@ export default function ChatContainer({
                   />
                 </MetricsProvider>
                 <PromptInput
-                  workspace={workspace}
-                  submit={handleSubmit}
-                  isStreaming={loadingResponse}
-                  sendCommand={sendCommand}
-                  attachments={files}
-                  centered={false}
-                />
+                    workspace={workspace}
+                    submit={handleSubmit}
+                    isStreaming={loadingResponse}
+                    sendCommand={sendCommand}
+                    attachments={files}
+                    centered={false}
+                    pendingTool={pendingTool}
+                    onSelectTool={handleSelectTool}
+                    onClearTool={handleClearTool}
+                    enabledTools={enabledTools}
+                  />
               </div>
             </div>
           </DnDFileUploaderWrapper>
