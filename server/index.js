@@ -45,6 +45,9 @@ const {
   googleAgentSkillEndpoints,
 } = require("./endpoints/utils/googleAgentSkillEndpoints");
 const { memoryEndpoints } = require("./endpoints/memory");
+const {
+  databaseConnectorEndpoints,
+} = require("./endpoints/databaseConnectors");
 const { oidcEndpoints } = require("./endpoints/oidc");
 const { httpLogger } = require("./middleware/httpLogger");
 const app = express();
@@ -112,6 +115,7 @@ scheduledJobEndpoints(apiRouter);
 outlookAgentEndpoints(apiRouter);
 googleAgentSkillEndpoints(apiRouter);
 memoryEndpoints(apiRouter);
+databaseConnectorEndpoints(apiRouter);
 oidcEndpoints(apiRouter);
 // Externally facing embedder endpoints
 embeddedEndpoints(apiRouter);

@@ -408,6 +408,12 @@ const SidebarOptions = ({ user = null, t }) => (
               hidden: !!user,
             },
             {
+              btnText: "Database Connectors",
+              href: paths.settings.databaseConnectors(),
+              flex: true,
+              roles: ["admin"],
+            },
+            {
               btnText: t("settings.api-keys"),
               href: paths.settings.apiKeys(),
               flex: true,
