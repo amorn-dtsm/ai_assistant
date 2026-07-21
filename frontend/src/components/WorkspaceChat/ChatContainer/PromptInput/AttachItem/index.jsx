@@ -10,6 +10,7 @@ import {
 } from "../../DnDWrapper";
 import { useTheme } from "@/hooks/useTheme";
 import ParsedFilesMenu from "./ParsedFilesMenu";
+import AttachModePopup from "./AttachModePopup";
 
 /**
  * This is a simple proxy component that clicks on the DnD file uploader for the user.
@@ -31,6 +32,7 @@ export default function AttachItem({
   const [contextWindow, setContextWindow] = useState(Infinity);
   const [showTooltip, setShowTooltip] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showPopup, setShowPopup] = useState(false);
 
   const fetchFiles = () => {
     if (!slug) return;
@@ -62,13 +64,13 @@ export default function AttachItem({
 
   /**
    * Handles the click event for the attach item button.
+   * Toggles the AttachModePopup instead of directly opening the file picker.
    * @param {MouseEvent} e - The click event.
    * @returns {void}
    */
   function handleClick(e) {
     e?.target?.blur();
-    document?.getElementById("dnd-chat-file-uploader")?.click();
-    return;
+    setShowPopup((prev) => !prev);
   }
 
   useEffect(() => {
@@ -86,33 +88,40 @@ export default function AttachItem({
 
   return (
     <>
-      <button
-        id="attach-item-btn"
-        data-tooltip-id={
-          showTooltip ? "tooltip-attach-item-btn" : "attach-item-btn"
-        }
-        data-tooltip-content={
-          !showTooltip ? t("chat_window.attach_file") : undefined
-        }
-        aria-label={t("chat_window.attach_file")}
-        type="button"
-        onClick={handleClick}
-        onPointerEnter={fetchFiles}
-        className="group border-none relative flex justify-center items-center cursor-pointer w-6 h-6 rounded-full hover:bg-zinc-700 light:hover:bg-slate-200"
-      >
-        <div className="relative">
-          <Plus
-            size={18}
-            className="pointer-events-none text-zinc-300 light:text-slate-600 group-hover:text-white light:group-hover:text-slate-600 shrink-0"
-            weight="bold"
-          />
-          {files.length > 0 && (
-            <div className="absolute -top-2.5 -right-2 bg-white text-black light:invert text-[8px] rounded-full px-1 flex items-center justify-center">
-              {files.length}
-            </div>
-          )}
-        </div>
-      </button>
+      <div className="relative">
+        <button
+          id="attach-item-btn"
+          data-testid="attach-item-btn"
+          data-tooltip-id={
+            showTooltip ? "tooltip-attach-item-btn" : "attach-item-btn"
+          }
+          data-tooltip-content={
+            !showTooltip ? t("chat_window.attach_file") : undefined
+          }
+          aria-label={t("chat_window.attach_file")}
+          type="button"
+          onClick={handleClick}
+          onPointerEnter={fetchFiles}
+          className="group border-none relative flex justify-center items-center cursor-pointer w-6 h-6 rounded-full hover:bg-zinc-700 light:hover:bg-slate-200"
+        >
+          <div className="relative">
+            <Plus
+              size={18}
+              className="pointer-events-none text-zinc-300 light:text-slate-600 group-hover:text-white light:group-hover:text-slate-600 shrink-0"
+              weight="bold"
+            />
+            {files.length > 0 && (
+              <div className="absolute -top-2.5 -right-2 bg-white text-black light:invert text-[8px] rounded-full px-1 flex items-center justify-center">
+                {files.length}
+              </div>
+            )}
+          </div>
+        </button>
+        <AttachModePopup
+          showing={showPopup}
+          setShowing={setShowPopup}
+        />
+      </div>
       {showTooltip && (
         <Tooltip
           ref={tooltipRef}

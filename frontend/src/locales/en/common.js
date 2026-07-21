@@ -1884,6 +1884,35 @@ const TRANSLATIONS = {
         generic: "File",
       },
     },
+    aiTools: {
+      popup: {
+        attach: "Attach file",
+        xray: "Analyze X-ray image",
+        searchablePdf: "Make Searchable PDF",
+        ocr: "OCR",
+      },
+      card: {
+        ocrTitle: "OCR Result",
+        xrayTitle: "X-ray Analysis",
+        pdfTitle: "Searchable PDF",
+        copy: "Copy",
+        copied: "Copied!",
+        downloadTxt: "Download as Text",
+        downloadPdf: "Download as PDF",
+        importToWorkspace: "Import to workspace for Q&A",
+        pages: "Pages",
+        errorTitle: "Processing failed",
+        processing: "Processing...",
+      },
+      errors: {
+        fileTooLarge: "File is too large",
+        invalidType: "Invalid file type",
+        singleFileOnly: "Only 1 file per tool action",
+        upstream: "Service error",
+        timeout: "Request timeout",
+        notConfigured: "Tool not configured",
+      },
+    },
   },
 };
 
