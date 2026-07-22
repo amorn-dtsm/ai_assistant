@@ -4,7 +4,7 @@ const { WorkspaceChats } = require("../../models/workspaceChats");
 
 /**
  * Run X-ray analysis on an uploaded image file
- * 
+ *
  * @param {Object} options
  * @param {Object} options.workspace - Workspace object
  * @param {Object} options.user - User object
@@ -14,7 +14,7 @@ const { WorkspaceChats } = require("../../models/workspaceChats");
  * @param {string} options.file.originalname - Original filename
  * @param {string} options.file.mimetype - MIME type
  * @param {string} options.sourceId - UUID v4 identifier for this execution
- * 
+ *
  * @returns {Promise<Object>} Result object with chatId, sourceId, toolResult, text
  * @throws {ToolApiError} On external API failure (error is persisted to history)
  */

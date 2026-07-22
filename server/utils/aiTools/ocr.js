@@ -6,7 +6,7 @@ const { WorkspaceChats } = require("../../models/workspaceChats");
 
 /**
  * Run OCR on an uploaded file
- * 
+ *
  * @param {Object} options
  * @param {Object} options.workspace - Workspace object with id
  * @param {Object} options.user - User object with id

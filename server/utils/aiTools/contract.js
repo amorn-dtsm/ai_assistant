@@ -1,11 +1,11 @@
 /**
  * AI Tools External API Contract
- * 
+ *
  * Shared constants and type definitions for:
  * - External API client adapter (server/utils/aiTools/client.js)
  * - Mock external API server (server/scripts/mock-ai-tools-api.js)
  * - Service modules (server/utils/aiTools/ocr.js, etc.)
- * 
+ *
  * This is the single source of truth for tool IDs, endpoints, limits, and error codes.
  * See docs/tool-api-contract.md for the full API specification.
  */
@@ -15,9 +15,9 @@
  * @type {Object<string, string>}
  */
 const TOOLS = {
-  OCR: 'ocr',
-  SEARCHABLE_PDF: 'searchablePdf',
-  XRAY: 'xray',
+  OCR: "ocr",
+  SEARCHABLE_PDF: "searchablePdf",
+  XRAY: "xray",
 };
 
 /**
@@ -25,9 +25,9 @@ const TOOLS = {
  * @type {Object<string, string>}
  */
 const ENDPOINTS = {
-  [TOOLS.OCR]: '/ocr',
-  [TOOLS.SEARCHABLE_PDF]: '/searchable-pdf',
-  [TOOLS.XRAY]: '/analyze',
+  [TOOLS.OCR]: "/ocr",
+  [TOOLS.SEARCHABLE_PDF]: "/searchable-pdf",
+  [TOOLS.XRAY]: "/analyze",
 };
 
 /**
@@ -35,11 +35,11 @@ const ENDPOINTS = {
  * @type {Object<string, string>}
  */
 const ERROR_CODES = {
-  TIMEOUT: 'TIMEOUT',
-  UPSTREAM_5XX: 'UPSTREAM_5XX',
-  UPSTREAM_4XX: 'UPSTREAM_4XX',
-  INVALID_FILE: 'INVALID_FILE',
-  NOT_CONFIGURED: 'NOT_CONFIGURED',
+  TIMEOUT: "TIMEOUT",
+  UPSTREAM_5XX: "UPSTREAM_5XX",
+  UPSTREAM_4XX: "UPSTREAM_4XX",
+  INVALID_FILE: "INVALID_FILE",
+  NOT_CONFIGURED: "NOT_CONFIGURED",
 };
 
 /**
@@ -49,18 +49,18 @@ const ERROR_CODES = {
 const LIMITS = {
   [TOOLS.OCR]: {
     maxSizeBytes: 50 * 1024 * 1024, // 50 MB
-    mimeTypes: ['application/pdf', 'image/png', 'image/jpeg', 'image/tiff'],
-    extensions: ['pdf', 'png', 'jpg', 'jpeg', 'tiff'],
+    mimeTypes: ["application/pdf", "image/png", "image/jpeg", "image/tiff"],
+    extensions: ["pdf", "png", "jpg", "jpeg", "tiff"],
   },
   [TOOLS.SEARCHABLE_PDF]: {
     maxSizeBytes: 100 * 1024 * 1024, // 100 MB
-    mimeTypes: ['application/pdf'],
-    extensions: ['pdf'],
+    mimeTypes: ["application/pdf"],
+    extensions: ["pdf"],
   },
   [TOOLS.XRAY]: {
     maxSizeBytes: 25 * 1024 * 1024, // 25 MB
-    mimeTypes: ['image/png', 'image/jpeg'],
-    extensions: ['png', 'jpg', 'jpeg'],
+    mimeTypes: ["image/png", "image/jpeg"],
+    extensions: ["png", "jpg", "jpeg"],
   },
 };
 
@@ -86,7 +86,7 @@ const EXTERNAL_CALL_TIMEOUT_MS = 120 * 1000; // 120 seconds
 
 /**
  * Tool Result JSON Type Definition (JSDoc for reference)
- * 
+ *
  * @typedef {Object} ToolResult
  * @property {number} schemaVersion - Always 1 for this version
  * @property {string} type - Always "toolResult"
@@ -103,7 +103,7 @@ const EXTERNAL_CALL_TIMEOUT_MS = 120 * 1000; // 120 seconds
 
 /**
  * OCR Result Payload Type Definition
- * 
+ *
  * @typedef {Object} OcrPayload
  * @property {string} text - Full extracted text
  * @property {number} pages - Number of pages processed
@@ -113,7 +113,7 @@ const EXTERNAL_CALL_TIMEOUT_MS = 120 * 1000; // 120 seconds
 
 /**
  * X-ray Result Payload Type Definition
- * 
+ *
  * @typedef {Object} XrayPayload
  * @property {string} findings - Detailed analysis findings
  * @property {Array<{name: string, confidence: number}>} [labels] - Detected objects/anomalies
@@ -121,7 +121,7 @@ const EXTERNAL_CALL_TIMEOUT_MS = 120 * 1000; // 120 seconds
 
 /**
  * Searchable PDF Result Payload Type Definition
- * 
+ *
  * @typedef {Object} SearchablePdfPayload
  * Empty object; binary PDF is stored separately
  */
