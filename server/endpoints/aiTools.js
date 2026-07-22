@@ -177,9 +177,7 @@ function mapErrorToStatus(errorCode) {
  */
 async function findChatBySourceId(workspaceId, sourceId) {
   try {
-    const chats = await WorkspaceChats.forWorkspace(workspaceId, {
-      limit: 1000,
-    });
+    const chats = await WorkspaceChats.where({ workspaceId }, 1000, { id: "desc" });
     for (const chat of chats) {
       try {
         const response = JSON.parse(chat.response);

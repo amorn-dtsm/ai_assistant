@@ -13,7 +13,7 @@ const MODE_OPTIONS = [
   {
     id: "attach",
     testId: "mode-option-attach",
-    i18nKey: "aiTools.popup.attach",
+    i18nKey: "chat_window.aiTools.popup.attach",
     defaultLabel: "\u0E41\u0E19\u0E1A\u0E44\u0E1F\u0E25\u0E4C",
     Icon: PaperclipHorizontal,
     tool: null,
@@ -21,7 +21,7 @@ const MODE_OPTIONS = [
   {
     id: "xray",
     testId: "mode-option-xray",
-    i18nKey: "aiTools.popup.xray",
+    i18nKey: "chat_window.aiTools.popup.xray",
     defaultLabel: "\u0E27\u0E34\u0E40\u0E04\u0E23\u0E32\u0E30\u0E2B\u0E4C\u0E20\u0E32\u0E1E\u0E40\u0E2D\u0E01\u0E0B\u0E40\u0E23\u0E22\u0E4C",
     Icon: Sparkle,
     tool: AI_TOOL_IDS.XRAY,
@@ -29,7 +29,7 @@ const MODE_OPTIONS = [
   {
     id: "searchable_pdf",
     testId: "mode-option-searchable-pdf",
-    i18nKey: "aiTools.popup.searchablePdf",
+    i18nKey: "chat_window.aiTools.popup.searchablePdf",
     defaultLabel: "Make Searchable PDF",
     Icon: FileText,
     tool: AI_TOOL_IDS.SEARCHABLE_PDF,
@@ -37,7 +37,7 @@ const MODE_OPTIONS = [
   {
     id: "ocr",
     testId: "mode-option-ocr",
-    i18nKey: "aiTools.popup.ocr",
+    i18nKey: "chat_window.aiTools.popup.ocr",
     defaultLabel: "OCR",
     Icon: Scan,
     tool: AI_TOOL_IDS.OCR,
@@ -79,13 +79,38 @@ function openFilteredFilePicker(toolId) {
 }
 
 /**
+ * Normalize enabledTools to an array of tool IDs.
+ * Handles both array input and object input (from status endpoint).
+ * Maps server keys (ocr, searchablePdf, xray) to frontend IDs.
+ */
+function normalizeEnabledTools(input) {
+  // If already an array, return as-is
+  if (Array.isArray(input)) {
+    return input;
+  }
+
+  // If object (from status endpoint), map truthy keys to frontend IDs
+  if (input && typeof input === "object") {
+    const tools = [];
+    if (input.ocr) tools.push(AI_TOOL_IDS.OCR);
+    if (input.searchablePdf) tools.push(AI_TOOL_IDS.SEARCHABLE_PDF);
+    if (input.xray) tools.push(AI_TOOL_IDS.XRAY);
+    return tools;
+  }
+
+  // Fallback: all tools enabled
+  return [AI_TOOL_IDS.OCR, AI_TOOL_IDS.XRAY, AI_TOOL_IDS.SEARCHABLE_PDF];
+}
+
+/**
  * AttachModePopup — click-anchored popover for the "+" attach button.
  *
  * Props:
  *  - showing       {boolean}  Whether the popup is visible.
  *  - setShowing     {function} Toggle visibility.
  *  - onSelectMode   {function} Called with (toolId, file) when a tool option is picked.
- *  - enabledTools   {string[]} Which tool IDs to show (default: all tools enabled).
+ *  - enabledTools   {string[] | object} Which tool IDs to show (default: all tools enabled).
+ *                   Can be array of IDs or status object {ocr, searchablePdf, xray}.
  */
 export default function AttachModePopup({
   showing,
@@ -115,8 +140,11 @@ export default function AttachModePopup({
 
   if (!showing) return null;
 
+  // Normalize enabledTools to array (defensive against shape mismatch)
+  const normalizedTools = normalizeEnabledTools(enabledTools);
+
   const visibleOptions = MODE_OPTIONS.filter(
-    (opt) => opt.tool === null || enabledTools.includes(opt.tool)
+    (opt) => opt.tool === null || normalizedTools.includes(opt.tool)
   );
 
   function handleOptionClick(option) {
@@ -157,7 +185,7 @@ export default function AttachModePopup({
       <div
         ref={popoverRef}
         data-testid="attach-mode-popup"
-        className="absolute bottom-full mb-2 right-0 z-50 flex flex-col"
+        className="absolute bottom-full mb-2 left-0 z-50 flex flex-col"
         style={{
           backgroundColor: "#FAFAFA",
           borderRadius: 12,

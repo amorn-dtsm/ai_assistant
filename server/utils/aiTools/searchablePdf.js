@@ -161,7 +161,7 @@ async function importSearchablePdf({ workspace, user, sourceId }) {
 
     // 2. Get the original filename from the chat row
     const { WorkspaceChats } = require("../../models/workspaceChats");
-    const chats = await WorkspaceChats.forWorkspace(workspace.id, { limit: 1000 });
+    const chats = await WorkspaceChats.where({ workspaceId: workspace.id }, 1000, { id: "desc" });
     let originalFilename = "searchable.pdf";
     for (const chat of chats) {
       try {
@@ -176,16 +176,19 @@ async function importSearchablePdf({ workspace, user, sourceId }) {
     }
 
     // 3. Copy searchable.pdf to collector hotdir with unique collision-safe name
-    const hotdir = path.join(__dirname, "../../collector/hotdir");
+    const hotdir =
+      process.env.NODE_ENV === "development"
+        ? path.resolve(__dirname, `../../../collector/hotdir`)
+        : path.resolve(process.env.STORAGE_DIR, `../../collector/hotdir`);
     if (!fs.existsSync(hotdir)) {
       fs.mkdirSync(hotdir, { recursive: true });
     }
 
-    // Generate unique filename: timestamp + sourceId + original name
-    const timestamp = Date.now();
+    // Generate unique filename: sourceId prefix + original name
+    const sourceIdPrefix = sourceId.substring(0, 8);
     const safeOriginalName = path.basename(originalFilename)
       .replace(/[<>:"|?*\x00-\x1f]/g, "_");
-    const uniqueFilename = `${timestamp}-${sourceId}-${safeOriginalName}`;
+    const uniqueFilename = `${safeOriginalName.replace(/\.[^.]*$/, "")}-searchable-${sourceIdPrefix}.pdf`;
     const hotdirPath = path.join(hotdir, uniqueFilename);
 
     // Copy file to hotdir

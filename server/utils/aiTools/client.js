@@ -136,8 +136,8 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
       if (!contentType || !contentType.includes("application/pdf")) {
         throw new ToolApiError(ERROR_CODES.UPSTREAM_5XX, "Expected application/pdf response");
       }
-      const buffer = await response.buffer();
-      return buffer;
+      const buf = Buffer.from(await response.arrayBuffer());
+      return buf;
     } else {
       // OCR and X-ray return JSON
       const data = await response.json();
