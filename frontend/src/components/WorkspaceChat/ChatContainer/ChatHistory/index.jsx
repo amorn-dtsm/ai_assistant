@@ -352,7 +352,7 @@ function buildMessages({
     } else if (props.type === "toolResult") {
       acc.push(
         <ToolResultCard
-          key={props.uuid || `tool-result-${props.clientRequestId}`}
+          key={props.uuid || props.chatId || props.toolResult?.sourceId || `tool-result-${index}`}
           toolResult={props.toolResult}
           content={props.content}
           pending={props.pending}
