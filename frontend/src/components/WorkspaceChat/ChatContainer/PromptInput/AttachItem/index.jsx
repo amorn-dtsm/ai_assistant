@@ -29,6 +29,7 @@ export default function AttachItem({
   const slug = workspaceSlug || params.slug;
   const threadSlug = workspaceThreadSlug ?? params.threadSlug ?? null;
   const tooltipRef = useRef(null);
+  const buttonRef = useRef(null);
   const [isEmbedding, setIsEmbedding] = useState(false);
   const [files, setFiles] = useState([]);
   const [currentTokens, setCurrentTokens] = useState(0);
@@ -93,6 +94,7 @@ export default function AttachItem({
     <>
       <div className="relative">
         <button
+          ref={buttonRef}
           id="attach-item-btn"
           data-testid="attach-item-btn"
           data-tooltip-id={
@@ -126,6 +128,7 @@ export default function AttachItem({
           onSelectMode={onSelectTool}
           enabledTools={enabledTools}
           hasPendingTool={hasPendingTool}
+          anchorRef={buttonRef}
         />
       </div>
       {showTooltip && (

@@ -1,5 +1,10 @@
 const fs = require("fs");
-const { TOOLS, ENDPOINTS, ERROR_CODES, LIMITS, EXTERNAL_CALL_TIMEOUT_MS } = require("./contract");
+const {
+  TOOLS,
+  ENDPOINTS,
+  ERROR_CODES,
+  EXTERNAL_CALL_TIMEOUT_MS,
+} = require("./contract");
 
 /**
  * Custom error class for tool API errors
@@ -53,7 +58,7 @@ function isToolConfigured(tool) {
 
 /**
  * Call an external AI tool API
- * 
+ *
  * @param {string} tool - Tool ID: "ocr" | "searchablePdf" | "xray"
  * @param {Object} options - Call options
  * @param {string} options.filePath - Absolute path to the file to upload
@@ -75,12 +80,18 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
   const apiKey = process.env[apiKeyKey];
 
   if (!baseUrl) {
-    throw new ToolApiError(ERROR_CODES.NOT_CONFIGURED, `Tool ${tool} is not configured (missing ${baseUrlKey})`);
+    throw new ToolApiError(
+      ERROR_CODES.NOT_CONFIGURED,
+      `Tool ${tool} is not configured (missing ${baseUrlKey})`
+    );
   }
 
   // Validate file exists
   if (!fs.existsSync(filePath)) {
-    throw new ToolApiError(ERROR_CODES.INVALID_FILE, `File not found: ${filePath}`);
+    throw new ToolApiError(
+      ERROR_CODES.INVALID_FILE,
+      `File not found: ${filePath}`
+    );
   }
 
   // Build multipart request using native FormData (Node 18+)
@@ -95,7 +106,10 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
 
   // Create abort controller for timeout
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), EXTERNAL_CALL_TIMEOUT_MS);
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    EXTERNAL_CALL_TIMEOUT_MS
+  );
 
   try {
     // Make request
@@ -124,7 +138,9 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
       }
 
       // Log only status code and error code, never response body
-      console.error(`[ToolApiError] ${tool} returned ${statusCode}`, { code: errorCode });
+      console.error(`[ToolApiError] ${tool} returned ${statusCode}`, {
+        code: errorCode,
+      });
 
       throw new ToolApiError(errorCode, `Upstream API returned ${statusCode}`);
     }
@@ -134,7 +150,10 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
       // Searchable PDF returns binary PDF
       const contentType = response.headers.get("content-type");
       if (!contentType || !contentType.includes("application/pdf")) {
-        throw new ToolApiError(ERROR_CODES.UPSTREAM_5XX, "Expected application/pdf response");
+        throw new ToolApiError(
+          ERROR_CODES.UPSTREAM_5XX,
+          "Expected application/pdf response"
+        );
       }
       const buf = Buffer.from(await response.arrayBuffer());
       return buf;
@@ -143,7 +162,10 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
       const data = await response.json();
 
       if (!data.ok) {
-        throw new ToolApiError(ERROR_CODES.UPSTREAM_5XX, `API returned ok:false`);
+        throw new ToolApiError(
+          ERROR_CODES.UPSTREAM_5XX,
+          `API returned ok:false`
+        );
       }
 
       return data;
@@ -153,7 +175,10 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
 
     // Handle abort (timeout)
     if (error.name === "AbortError") {
-      throw new ToolApiError(ERROR_CODES.TIMEOUT, `Request timeout after ${EXTERNAL_CALL_TIMEOUT_MS}ms`);
+      throw new ToolApiError(
+        ERROR_CODES.TIMEOUT,
+        `Request timeout after ${EXTERNAL_CALL_TIMEOUT_MS}ms`
+      );
     }
 
     // Re-throw ToolApiError
@@ -162,8 +187,14 @@ async function callToolApi(tool, { filePath, filename, mimeType }) {
     }
 
     // Wrap other errors
-    console.error(`[ToolApiError] Unexpected error calling ${tool}:`, error.message);
-    throw new ToolApiError(ERROR_CODES.UPSTREAM_5XX, `Request failed: ${error.message}`);
+    console.error(
+      `[ToolApiError] Unexpected error calling ${tool}:`,
+      error.message
+    );
+    throw new ToolApiError(
+      ERROR_CODES.UPSTREAM_5XX,
+      `Request failed: ${error.message}`
+    );
   }
 }
 

@@ -7,7 +7,7 @@ const { CollectorApi } = require("../collectorApi");
 
 /**
  * Run Searchable PDF on an uploaded file
- * 
+ *
  * @param {Object} options
  * @param {Object} options.workspace - Workspace object with id
  * @param {Object} options.user - User object with id
@@ -32,8 +32,15 @@ async function runSearchablePdf({ workspace, user, threadId, file, sourceId }) {
     });
 
     // 2. Validate PDF magic bytes
-    if (!pdfBuffer || pdfBuffer.length < 4 || pdfBuffer.toString("utf8", 0, 4) !== "%PDF") {
-      throw new ToolApiError("INVALID_FILE", "Response is not a valid PDF (missing %PDF magic bytes)");
+    if (
+      !pdfBuffer ||
+      pdfBuffer.length < 4 ||
+      pdfBuffer.toString("utf8", 0, 4) !== "%PDF"
+    ) {
+      throw new ToolApiError(
+        "INVALID_FILE",
+        "Response is not a valid PDF (missing %PDF magic bytes)"
+      );
     }
 
     // 3. Write searchable.pdf to storage
@@ -137,7 +144,7 @@ async function runSearchablePdf({ workspace, user, threadId, file, sourceId }) {
 /**
  * Import a searchable PDF into the workspace document flow
  * Reuses the existing CollectorApi.processDocument entry point
- * 
+ *
  * @param {Object} options
  * @param {Object} options.workspace - Workspace object with id
  * @param {Object} options.user - User object with id
@@ -145,7 +152,7 @@ async function runSearchablePdf({ workspace, user, threadId, file, sourceId }) {
  * @returns {Promise<{ok: boolean, document?: Object}>}
  * @throws {Error} On processing failure
  */
-async function importSearchablePdf({ workspace, user, sourceId }) {
+async function importSearchablePdf({ workspace, _user, sourceId }) {
   try {
     // 1. Verify searchable.pdf exists
     const storageDir = path.join(
@@ -161,7 +168,11 @@ async function importSearchablePdf({ workspace, user, sourceId }) {
 
     // 2. Get the original filename from the chat row
     const { WorkspaceChats } = require("../../models/workspaceChats");
-    const chats = await WorkspaceChats.where({ workspaceId: workspace.id }, 1000, { id: "desc" });
+    const chats = await WorkspaceChats.where(
+      { workspaceId: workspace.id },
+      1000,
+      { id: "desc" }
+    );
     let originalFilename = "searchable.pdf";
     for (const chat of chats) {
       try {
@@ -186,7 +197,9 @@ async function importSearchablePdf({ workspace, user, sourceId }) {
 
     // Generate unique filename: sourceId prefix + original name
     const sourceIdPrefix = sourceId.substring(0, 8);
-    const safeOriginalName = path.basename(originalFilename)
+    const safeOriginalName = path
+      .basename(originalFilename)
+      // eslint-disable-next-line no-control-regex
       .replace(/[<>:"|?*\x00-\x1f]/g, "_");
     const uniqueFilename = `${safeOriginalName.replace(/\.[^.]*$/, "")}-searchable-${sourceIdPrefix}.pdf`;
     const hotdirPath = path.join(hotdir, uniqueFilename);

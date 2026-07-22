@@ -1,4 +1,5 @@
-import { useRef, useEffect, useCallback } from "react";
+import { useRef, useEffect, useCallback, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import {
   PaperclipHorizontal,
@@ -111,6 +112,7 @@ function normalizeEnabledTools(input) {
  *  - onSelectMode   {function} Called with (toolId, file) when a tool option is picked.
  *  - enabledTools   {string[] | object} Which tool IDs to show (default: all tools enabled).
  *                   Can be array of IDs or status object {ocr, searchablePdf, xray}.
+ *  - anchorRef      {React.RefObject} Ref to the trigger button for positioning.
  */
 export default function AttachModePopup({
   showing,
@@ -118,11 +120,39 @@ export default function AttachModePopup({
   onSelectMode = () => {},
   enabledTools = [AI_TOOL_IDS.OCR, AI_TOOL_IDS.XRAY, AI_TOOL_IDS.SEARCHABLE_PDF],
   hasPendingTool = false,
+  anchorRef = null,
 }) {
   const { t } = useTranslation();
   const popoverRef = useRef(null);
+  const [position, setPosition] = useState({ left: 0, bottom: 0 });
 
   const close = useCallback(() => setShowing(false), [setShowing]);
+
+  // Compute position from anchor button
+  useEffect(() => {
+    if (!showing || !anchorRef?.current) return;
+
+    function updatePosition() {
+      const rect = anchorRef.current.getBoundingClientRect();
+      let left = rect.left;
+      const bottom = window.innerHeight - rect.top + 8;
+
+      // Clamp left so panel (minWidth 220) stays within viewport
+      left = Math.min(left, window.innerWidth - 228);
+      left = Math.max(left, 0);
+
+      setPosition({ left, bottom });
+    }
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition);
+    };
+  }, [showing, anchorRef]);
 
   // Escape key closes the popup
   useEffect(() => {
@@ -173,7 +203,7 @@ export default function AttachModePopup({
     });
   }
 
-  return (
+  return createPortal(
     <>
       {/* Outside-click overlay */}
       <div
@@ -185,8 +215,10 @@ export default function AttachModePopup({
       <div
         ref={popoverRef}
         data-testid="attach-mode-popup"
-        className="absolute bottom-full mb-2 left-0 z-50 flex flex-col"
+        className="fixed z-50 flex flex-col"
         style={{
+          left: `${position.left}px`,
+          bottom: `${position.bottom}px`,
           backgroundColor: "#FAFAFA",
           borderRadius: 12,
           padding: 2,
@@ -217,6 +249,7 @@ export default function AttachModePopup({
           </button>
         ))}
       </div>
-    </>
+    </>,
+    document.body
   );
 }

@@ -2,8 +2,7 @@ const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const { v4: uuidv4 } = require("uuid");
-const { reqBody, userFromSession, multiUserMode } = require("../utils/http");
+const { userFromSession, multiUserMode } = require("../utils/http");
 const { validatedRequest } = require("../utils/middleware/validatedRequest");
 const {
   ROLES,
@@ -14,7 +13,6 @@ const { isToolConfigured, ToolApiError } = require("../utils/aiTools/client");
 const { TOOLS, LIMITS, ERROR_CODES } = require("../utils/aiTools/contract");
 const { WorkspaceChats } = require("../models/workspaceChats");
 const { WorkspaceThread } = require("../models/workspaceThread");
-const { User } = require("../models/user");
 
 const documentsPath =
   process.env.NODE_ENV === "development"
@@ -37,6 +35,7 @@ function sanitizeFilename(filename) {
   // Remove path separators
   let safe = path.basename(filename);
   // Remove any remaining dangerous characters but keep extension
+  // eslint-disable-next-line no-control-regex
   safe = safe.replace(/[<>:"|?*\x00-\x1f]/g, "_");
   return safe || "file";
 }
@@ -53,7 +52,7 @@ function isValidUUIDv4(str) {
 /**
  * Create multer storage for a specific tool
  */
-function createToolStorage(tool) {
+function createToolStorage(_tool) {
   return multer.diskStorage({
     destination: (req, file, cb) => {
       const sourceId = req.sourceId;
@@ -177,7 +176,9 @@ function mapErrorToStatus(errorCode) {
  */
 async function findChatBySourceId(workspaceId, sourceId) {
   try {
-    const chats = await WorkspaceChats.where({ workspaceId }, 1000, { id: "desc" });
+    const chats = await WorkspaceChats.where({ workspaceId }, 1000, {
+      id: "desc",
+    });
     for (const chat of chats) {
       try {
         const response = JSON.parse(chat.response);
@@ -248,7 +249,7 @@ function aiToolsEndpoints(app) {
               [TOOLS.XRAY]: "../utils/aiTools/xray",
             };
             serviceModule = require(serviceMap[tool]);
-          } catch (e) {
+          } catch {
             return response.status(501).json({
               ok: false,
               error: "NOT_IMPLEMENTED",
@@ -390,7 +391,9 @@ function aiToolsEndpoints(app) {
           }
 
           const files = fs.readdirSync(sourceDir);
-          const originalFile = files.find((f) => f !== "result.txt" && f !== "searchable.pdf");
+          const originalFile = files.find(
+            (f) => f !== "result.txt" && f !== "searchable.pdf"
+          );
 
           if (!originalFile) {
             return response.status(404).json({
@@ -510,7 +513,7 @@ function aiToolsEndpoints(app) {
         let serviceModule;
         try {
           serviceModule = require("../utils/aiTools/searchablePdf");
-        } catch (e) {
+        } catch {
           return response.status(501).json({
             ok: false,
             error: "NOT_IMPLEMENTED",
