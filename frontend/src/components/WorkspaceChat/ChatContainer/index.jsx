@@ -211,12 +211,12 @@ export default function ChatContainer({
       // Async handler for tool submission with optional auto-thread creation
       const submitTool = async () => {
         try {
-          // If we're on a bare workspace route (no thread) and no chats exist yet,
-          // create a new thread first — same pattern as normal chat auto-thread.
+          // If we're on a bare workspace route (no thread), always create a new thread
+          // first. Legacy default history is read-only via UI.
           let toolThreadSlug = activeThreadSlug;
           let createdThread = null;
 
-          if (!activeThreadSlug && chatHistory.length === 0) {
+          if (!activeThreadSlug) {
             const { thread } = await Workspace.threads.new(workspace.slug);
             if (thread) {
               createdThread = thread;
@@ -359,9 +359,9 @@ export default function ChatContainer({
     // PromptInput remounts (empty→chat transition), it won't restore stale text
     clearPromptInputDraft(activeThreadSlug ?? workspace.slug);
 
-    // If we're on a bare workspace route (no thread) and no chats exist yet,
-    // create a new thread and navigate to it — mimicking Home page behavior.
-    if (!activeThreadSlug && chatHistory.length === 0) {
+    // If we're on a bare workspace route (no thread), always create a new thread
+    // and navigate to it. Legacy default history is read-only via UI.
+    if (!activeThreadSlug) {
       const { thread } = await Workspace.threads.new(workspace.slug);
       if (thread) {
         sessionStorage.setItem(
@@ -446,9 +446,9 @@ export default function ChatContainer({
 
     if (!text || text === "") return false;
 
-    // If on a bare workspace route with no thread and no chat yet, create a
-    // virtual thread and navigate — same as handleSubmit does.
-    if (!activeThreadSlug && chatHistory.length === 0 && history.length === 0) {
+    // If on a bare workspace route with no thread, always create a new thread
+    // and navigate. Legacy default history is read-only via UI.
+    if (!activeThreadSlug) {
       const { thread } = await Workspace.threads.new(workspace.slug);
       if (thread) {
         sessionStorage.setItem(
