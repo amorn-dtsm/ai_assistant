@@ -1,4 +1,4 @@
-process.env.NODE_ENV === "development"
+﻿process.env.NODE_ENV === "development"
   ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
   : require("dotenv").config();
 
@@ -45,6 +45,7 @@ const {
   googleAgentSkillEndpoints,
 } = require("./endpoints/utils/googleAgentSkillEndpoints");
 const { memoryEndpoints } = require("./endpoints/memory");
+const { aiToolsEndpoints } = require("./endpoints/aiTools");
 const {
   databaseConnectorEndpoints,
 } = require("./endpoints/databaseConnectors");
@@ -94,6 +95,7 @@ extensionEndpoints(apiRouter);
 workspaceEndpoints(apiRouter);
 workspaceThreadEndpoints(apiRouter);
 chatEndpoints(apiRouter);
+aiToolsEndpoints(apiRouter);
 adminEndpoints(apiRouter);
 modelRouterEndpoints(apiRouter);
 inviteEndpoints(apiRouter);

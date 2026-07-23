@@ -114,6 +114,13 @@ class EphemeralAgentHandler extends AgentHandler {
 
       const agentHistory = [];
       rawHistory.forEach((chatLog) => {
+        const parsed = safeJsonParse(chatLog.response);
+        // LLM-SAFETY BOUNDARY: toolResult structured fields must never reach agent context.
+        // See convertToPromptHistory in server/utils/helpers/chat/responses.js for primary choke-point.
+        const assistantContent =
+          parsed?.type === "toolResult"
+            ? parsed._forLLM ?? parsed.text ?? ""
+            : parsed?.text || "";
         agentHistory.push(
           {
             from: USER_AGENT.name,
@@ -124,7 +131,7 @@ class EphemeralAgentHandler extends AgentHandler {
           {
             from: WORKSPACE_AGENT.name,
             to: USER_AGENT.name,
-            content: safeJsonParse(chatLog.response)?.text || "",
+            content: assistantContent,
             state: "success",
           }
         );

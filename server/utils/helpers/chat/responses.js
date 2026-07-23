@@ -179,7 +179,34 @@ function convertToChatHistory(history = []) {
   const formattedHistory = [];
   for (const record of history) {
     const { prompt, response, createdAt, feedbackScore = null, id } = record;
-    const data = JSON.parse(response);
+
+    let data;
+    try {
+      data = JSON.parse(response);
+    } catch {
+      // Legacy or corrupt row — treat raw string as plain-text assistant content
+      if (typeof prompt !== "string") continue;
+      formattedHistory.push([
+        {
+          role: "user",
+          content: prompt,
+          sentAt: moment(createdAt).unix(),
+          attachments: [],
+          chatId: id,
+        },
+        {
+          type: "chart",
+          role: "assistant",
+          content: typeof response === "string" ? response : "",
+          sources: [],
+          chatId: id,
+          sentAt: moment(createdAt).unix(),
+          feedbackScore,
+          metrics: {},
+        },
+      ]);
+      continue;
+    }
 
     // In the event that a bad response was stored - we should skip its entire record
     // because it was likely an error and cannot be used in chats and will fail to render on UI.
@@ -192,6 +219,32 @@ function convertToChatHistory(history = []) {
       console.log(
         `[convertToChatHistory] ChatHistory #${record.id} response.text property is not a string - skipping record.`
       );
+      continue;
+    }
+
+    // toolResult entries carry the full structured object for frontend rendering
+    // (card display, source links, downloads) while normal entries stay unchanged.
+    if (data.type === "toolResult") {
+      formattedHistory.push([
+        {
+          role: "user",
+          content: prompt,
+          sentAt: moment(createdAt).unix(),
+          attachments: data?.attachments ?? [],
+          chatId: id,
+        },
+        {
+          type: "toolResult",
+          role: "assistant",
+          content: data.text,
+          toolResult: data.toolResult,
+          sources: data.sources || [],
+          chatId: id,
+          sentAt: moment(createdAt).unix(),
+          feedbackScore,
+          metrics: data?.metrics || {},
+        },
+      ]);
       continue;
     }
 
@@ -258,6 +311,26 @@ function formatClarifyingSurveyForPrompt(survey) {
 
 /**
  * Converts a chat history to a prompt history.
+ *
+ * ┌─────────────────────────────────────────────────────────────────────┐
+ * │ LLM-SAFETY BOUNDARY (choke-point)                                 │
+ * │                                                                    │
+ * │ ALL workspace_chats rows destined for LLM context MUST flow       │
+ * │ through this function.  For toolResult rows the assistant content  │
+ * │ is set to `_forLLM ?? text ?? ""` — structured fields (toolResult,│
+ * │ sourceId, schemaVersion, payload, downloads) MUST NEVER pass this │
+ * │ point into LLM context.                                           │
+ * │                                                                    │
+ * │ Audited consumer paths (all flow through here):                   │
+ * │  1. server/utils/chats/index.js          – recentChatHistory()    │
+ * │  2. server/utils/chats/embed.js          – recentEmbedChatHistory │
+ * │  3. server/utils/helpers/chat/index.js   – compressMessages       │
+ * │                                                                    │
+ * │ Secondary strip sites (agent paths – own format, same rule):      │
+ * │  4. server/utils/agents/index.js         – #chatHistory()         │
+ * │  5. server/utils/agents/ephemeral.js     – #chatHistory()         │
+ * └─────────────────────────────────────────────────────────────────────┘
+ *
  * @param {Object[]} history - The chat history to convert
  * @returns {{role: string, content: string, attachments?: import("..").Attachment}[]}
  */
@@ -265,7 +338,22 @@ function convertToPromptHistory(history = []) {
   const formattedHistory = [];
   for (const record of history) {
     const { prompt, response } = record;
-    const data = JSON.parse(response);
+
+    let data;
+    try {
+      data = JSON.parse(response);
+    } catch {
+      // Legacy or corrupt row — treat raw string as plain-text assistant content
+      if (typeof prompt !== "string") continue;
+      formattedHistory.push([
+        { role: "user", content: prompt },
+        {
+          role: "assistant",
+          content: typeof response === "string" ? response : "",
+        },
+      ]);
+      continue;
+    }
 
     // In the event that a bad response was stored - we should skip its entire record
     // because it was likely an error and cannot be used in chats and will fail to render on UI.
@@ -278,6 +366,19 @@ function convertToPromptHistory(history = []) {
       console.log(
         `[convertToPromptHistory] ChatHistory #${record.id} response.text property is not a string - skipping record.`
       );
+      continue;
+    }
+
+    // LLM-SAFETY BOUNDARY: toolResult structured fields must never pass this point.
+    // Only the curated _forLLM text (or fallback to .text) is emitted.
+    if (data.type === "toolResult") {
+      formattedHistory.push([
+        { role: "user", content: prompt },
+        {
+          role: "assistant",
+          content: data._forLLM ?? data.text ?? "",
+        },
+      ]);
       continue;
     }
 
