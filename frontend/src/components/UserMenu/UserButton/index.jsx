@@ -15,6 +15,7 @@ import {
   USER_PROMPT_INPUT_MAP,
 } from "@/utils/constants";
 import { useTranslation } from "react-i18next";
+import { keycloakLogout } from "@/utils/keycloakAuth";
 
 export default function UserButton() {
   const { t } = useTranslation();
@@ -94,6 +95,10 @@ export default function UserButton() {
             </a>
             <button
               onClick={() => {
+                if (window.localStorage.getItem("kc_refresh_token")) {
+                  keycloakLogout();
+                  return;
+                }
                 window.localStorage.removeItem(AUTH_USER);
                 window.localStorage.removeItem(AUTH_TOKEN);
                 window.localStorage.removeItem(AUTH_TIMESTAMP);

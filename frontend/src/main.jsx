@@ -9,6 +9,7 @@ import PrivateRoute, {
 } from "@/components/PrivateRoute";
 import Login from "@/pages/Login";
 import SimpleSSOPassthrough from "@/pages/Login/SSO/simple";
+import OidcCallback from "@/pages/OidcCallback";
 import OnboardingFlow from "@/pages/OnboardingFlow";
 import "@/index.css";
 
@@ -34,6 +35,10 @@ const router = createBrowserRouter([
       {
         path: "/sso/simple",
         element: <SimpleSSOPassthrough />,
+      },
+      {
+        path: "/oidc/callback",
+        element: <OidcCallback />,
       },
       {
         path: "/workspace/:slug/settings/:tab",
@@ -419,6 +424,15 @@ const router = createBrowserRouter([
           return {
             element: <SingleUserRoute Component={ScheduledJobRunDetail} />,
           };
+        },
+      },
+      {
+        path: "/settings/database-connectors",
+        lazy: async () => {
+          const { default: DatabaseConnectors } = await import(
+            "@/pages/Admin/DatabaseConnectors"
+          );
+          return { element: <AdminRoute Component={DatabaseConnectors} /> };
         },
       },
       // Catch-all route for 404s

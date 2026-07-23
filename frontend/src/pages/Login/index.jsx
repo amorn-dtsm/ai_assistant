@@ -1,10 +1,16 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import PasswordModal, { usePasswordModal } from "@/components/Modals/Password";
 import { FullScreenLoader } from "@/components/Preloader";
 import { Navigate } from "react-router-dom";
 import paths from "@/utils/paths";
 import useQuery from "@/hooks/useQuery";
 import useSimpleSSO from "@/hooks/useSimpleSSO";
+import {
+  fetchOidcConfig,
+  loginWithKeycloak,
+  markSsoAutoAttempt,
+  recentSsoAutoAttempt,
+} from "@/utils/keycloakAuth";
 
 /**
  * Login page that handles both single and multi-user login.
@@ -18,8 +24,15 @@ export default function Login() {
   const query = useQuery();
   const { loading: ssoLoading, ssoConfig } = useSimpleSSO();
   const { loading, requiresAuth, mode } = usePasswordModal(!!query.get("nt"));
+  const [oidcConfig, setOidcConfig] = useState(null);
 
-  if (loading || ssoLoading) return <FullScreenLoader />;
+  useEffect(() => {
+    fetchOidcConfig()
+      .then(setOidcConfig)
+      .catch(() => setOidcConfig({ enabled: false }));
+  }, []);
+
+  if (loading || ssoLoading || oidcConfig === null) return <FullScreenLoader />;
 
   // If simple SSO is enabled and no login is allowed, redirect to the SSO login page.
   if (ssoConfig.enabled && ssoConfig.noLogin) {
@@ -31,6 +44,20 @@ export default function Login() {
   }
 
   if (requiresAuth === false) return <Navigate to={paths.home()} />;
+
+  // Native OIDC as the default login: auto-redirect to Keycloak unless the
+  // user explicitly asked for the local form (?local=1) or we just bounced
+  // back from an SSO attempt (loop guard).
+  if (
+    oidcConfig?.enabled &&
+    oidcConfig?.defaultSSO &&
+    !query.get("local") &&
+    !recentSsoAutoAttempt()
+  ) {
+    markSsoAutoAttempt();
+    loginWithKeycloak();
+    return <FullScreenLoader />;
+  }
 
   return <PasswordModal mode={mode} />;
 }

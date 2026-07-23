@@ -2,7 +2,9 @@ const prisma = require("../utils/prisma");
 const { safeJsonParse } = require("../utils/http");
 
 const ExternalCommunicationConnector = {
-  supportedTypes: ["telegram"],
+  get supportedTypes() {
+    return require("../utils/channels").CHANNELS.map((c) => c.type);
+  },
 
   /**
    * Get a connector by type.
@@ -86,7 +88,7 @@ const ExternalCommunicationConnector = {
       return { connector: null, error: `No ${type} connector found` };
 
     const mergedConfig = { ...existing.config, ...configUpdates };
-    return this.upsert(type, mergedConfig, existing.active);
+    return this.upsert(type, { ...mergedConfig, active: existing.active });
   },
 
   /**

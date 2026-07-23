@@ -1,4 +1,4 @@
-process.env.NODE_ENV === "development"
+﻿process.env.NODE_ENV === "development"
   ? require("dotenv").config({ path: `.env.${process.env.NODE_ENV}` })
   : require("dotenv").config();
 
@@ -36,7 +36,7 @@ const { agentFlowEndpoints } = require("./endpoints/agentFlows");
 const { mcpServersEndpoints } = require("./endpoints/mcpServers");
 const { mobileEndpoints } = require("./endpoints/mobile");
 const { webPushEndpoints } = require("./endpoints/webPush");
-const { telegramEndpoints } = require("./endpoints/telegram");
+const { registerAllRoutes } = require("./utils/channels");
 const { scheduledJobEndpoints } = require("./endpoints/scheduledJobs");
 const {
   outlookAgentEndpoints,
@@ -46,6 +46,10 @@ const {
 } = require("./endpoints/utils/googleAgentSkillEndpoints");
 const { memoryEndpoints } = require("./endpoints/memory");
 const { aiToolsEndpoints } = require("./endpoints/aiTools");
+const {
+  databaseConnectorEndpoints,
+} = require("./endpoints/databaseConnectors");
+const { oidcEndpoints } = require("./endpoints/oidc");
 const { httpLogger } = require("./middleware/httpLogger");
 const app = express();
 const apiRouter = express.Router();
@@ -64,7 +68,14 @@ if (
 }
 app.use(cors({ origin: true }));
 app.use(bodyParser.text({ limit: FILE_LIMIT }));
-app.use(bodyParser.json({ limit: FILE_LIMIT }));
+app.use(
+  bodyParser.json({
+    limit: FILE_LIMIT,
+    verify: (req, _res, buf) => {
+      req.rawBody = buf.toString("utf8");
+    },
+  })
+);
 app.use(
   bodyParser.urlencoded({
     limit: FILE_LIMIT,
@@ -101,11 +112,13 @@ agentFlowEndpoints(apiRouter);
 mcpServersEndpoints(apiRouter);
 mobileEndpoints(apiRouter);
 webPushEndpoints(apiRouter);
-telegramEndpoints(apiRouter);
+registerAllRoutes(apiRouter);
 scheduledJobEndpoints(apiRouter);
 outlookAgentEndpoints(apiRouter);
 googleAgentSkillEndpoints(apiRouter);
 memoryEndpoints(apiRouter);
+databaseConnectorEndpoints(apiRouter);
+oidcEndpoints(apiRouter);
 // Externally facing embedder endpoints
 embeddedEndpoints(apiRouter);
 

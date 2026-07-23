@@ -14,6 +14,7 @@ class BackgroundService {
   static _instance = null;
   documentSyncEnabled = false;
   memoryExtractionEnabled = false;
+  dbConnectorSyncEnabled = false;
   #root = path.resolve(__dirname, "../../jobs");
   #scheduledJobTimers = new Map();
   #scheduledJobQueue = new PQueue({
@@ -51,6 +52,14 @@ class BackgroundService {
     {
       name: "sync-watched-documents",
       interval: "1hr",
+    },
+  ];
+
+  #dbConnectorSyncJobs = [
+    {
+      name: "db-connector-sync",
+      interval: "1m",
+      timeout: "1m",
     },
   ];
 
@@ -101,9 +110,14 @@ class BackgroundService {
     const { DocumentSyncQueue } = require("../../models/documentSyncQueue");
     const { SystemSettings } = require("../../models/systemSettings");
     const { ScheduledJobRun } = require("../../models/scheduledJobRun");
+    const { DatabaseConnector } = require("../../models/databaseConnector");
+    const {
+      DatabaseConnectorSyncLog,
+    } = require("../../models/databaseConnectorSyncLog");
 
     this.documentSyncEnabled = await DocumentSyncQueue.enabled();
     this.memoryExtractionEnabled = await SystemSettings.autoMemoriesEnabled();
+    this.dbConnectorSyncEnabled = await DatabaseConnector.anyActive();
 
     // Mark any orphaned scheduled job runs as failed (server crashed mid-execution)
     const orphanedCount = await ScheduledJobRun.failOrphanedRuns();
@@ -111,6 +125,31 @@ class BackgroundService {
       this.#log(
         `Marked ${orphanedCount} orphaned scheduled job run(s) as failed`
       );
+    }
+
+    // Mark orphaned database connector sync logs as failed
+    const dbOrphanedCount = await DatabaseConnectorSyncLog.failOrphanedRuns();
+    if (dbOrphanedCount > 0) {
+      this.#log(
+        `Marked ${dbOrphanedCount} orphaned db-connector sync log(s) as failed`
+      );
+    }
+
+    // Clear stale syncInProgress locks on database connectors
+    // (server crashed mid-sync → lock stuck forever without this)
+    const prisma = require("../prisma");
+    try {
+      const staleResult = await prisma.database_connectors.updateMany({
+        where: { syncInProgress: true },
+        data: { syncInProgress: false },
+      });
+      if (staleResult.count > 0) {
+        this.#log(
+          `Cleared ${staleResult.count} stale db-connector sync lock(s)`
+        );
+      }
+    } catch {
+      /* table may not exist yet — safe to ignore */
     }
 
     const jobsToRun = this.jobs();
@@ -161,6 +200,8 @@ class BackgroundService {
     const activeJobs = [...this.#alwaysRunJobs];
     if (this.memoryExtractionEnabled) activeJobs.push(...this.#memoryJobs);
     if (this.documentSyncEnabled) activeJobs.push(...this.#documentSyncJobs);
+    if (this.dbConnectorSyncEnabled)
+      activeJobs.push(...this.#dbConnectorSyncJobs);
     return activeJobs;
   }
 
@@ -184,6 +225,32 @@ class BackgroundService {
       this.#log(`Added and started ${jobName} job`);
     } else if (!enabled && isCurrentlyRunning) {
       this.memoryExtractionEnabled = false;
+      await this.bree.stop(jobName);
+      await this.bree.remove(jobName);
+      this.#log(`Stopped and removed ${jobName} job`);
+    }
+  }
+
+  /**
+   * Sync the database connector polling job based on whether any active connectors exist.
+   * Called from connector create/update/delete endpoints after modifying connector state.
+   * @param {boolean} enabled - The desired state (should the poller job run?)
+   */
+  async syncDbConnectorJob(enabled) {
+    if (!this.bree) return;
+
+    const jobName = this.#dbConnectorSyncJobs[0].name;
+    const isCurrentlyRunning = this.bree.config.jobs.some(
+      (j) => j.name === jobName
+    );
+
+    if (enabled && !isCurrentlyRunning) {
+      this.dbConnectorSyncEnabled = true;
+      await this.bree.add(this.#dbConnectorSyncJobs[0]);
+      await this.bree.start(jobName);
+      this.#log(`Added and started ${jobName} job`);
+    } else if (!enabled && isCurrentlyRunning) {
+      this.dbConnectorSyncEnabled = false;
       await this.bree.stop(jobName);
       await this.bree.remove(jobName);
       this.#log(`Stopped and removed ${jobName} job`);
