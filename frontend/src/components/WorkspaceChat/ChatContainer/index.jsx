@@ -75,6 +75,10 @@ export default function ChatContainer({
   const isEmpty =
     chatHistory.length === 0 && !sessionStorage.getItem(PENDING_HOME_MESSAGE);
 
+  // Track if component is mounted to prevent setState-after-unmount warnings
+  // during navigation after tool completion.
+  const mountedRef = useRef(true);
+
   /**
    * Keep chat history bottom-padding in sync with the prompt input's
    * actual rendered height so expanding input never covers messages.
@@ -125,8 +129,10 @@ export default function ChatContainer({
   }, [workspace?.slug]);
 
   // Abort in-flight tool request on unmount or workspace change.
+  // Also mark component as unmounted to prevent setState-after-unmount warnings.
   useEffect(() => {
     return () => {
+      mountedRef.current = false;
       toolAbortRef.current?.abort();
       toolAbortRef.current = null;
     };
@@ -202,99 +208,145 @@ export default function ChatContainer({
       const toolLabel = TOOL_LABELS[tool] || tool;
       const userContent = `[${toolLabel}] ${file.name}`;
 
-      // Optimistic chat entries — note: assistant entry intentionally omits
-      // `userMessage` so the fetchReply effect (which triggers multiplexStream)
-      // will bail out even if loadingResponse is true.
-      // Thread-bound: include threadSlug in optimistic entry for proper filtering
-      // if user navigates to another thread mid-flight.
-      setChatHistory((prev) => [
-        ...prev,
-        { content: userContent, role: "user", _toolClientId: clientRequestId, threadSlug: activeThreadSlug },
-        {
-          content: "",
-          role: "assistant",
-          type: "toolResult",
-          pending: true,
-          clientRequestId,
-          threadSlug: activeThreadSlug,
-          animate: true,
-        },
-      ]);
+      // Async handler for tool submission with optional auto-thread creation
+      const submitTool = async () => {
+        try {
+          // If we're on a bare workspace route (no thread) and no chats exist yet,
+          // create a new thread first — same pattern as normal chat auto-thread.
+          let toolThreadSlug = activeThreadSlug;
+          let createdThread = null;
 
-      setMessageEmit("");
-      setPendingTool(null);
-      clearPromptInputDraft(activeThreadSlug ?? workspace.slug);
-      if (listening) endSTTSession();
+          if (!activeThreadSlug && chatHistory.length === 0) {
+            const { thread } = await Workspace.threads.new(workspace.slug);
+            if (thread) {
+              createdThread = thread;
+              toolThreadSlug = thread.slug;
+            }
+          }
 
-      const ctrl = new AbortController();
-      toolAbortRef.current = ctrl;
-      setToolRequestInFlight(true);
+          // Optimistic chat entries — note: assistant entry intentionally omits
+          // `userMessage` so the fetchReply effect (which triggers multiplexStream)
+          // will bail out even if loadingResponse is true.
+          // Thread-bound: include threadSlug in optimistic entry for proper filtering
+          // if user navigates to another thread mid-flight.
+          if (mountedRef.current) {
+            setChatHistory((prev) => [
+              ...prev,
+              { content: userContent, role: "user", _toolClientId: clientRequestId, threadSlug: toolThreadSlug },
+              {
+                content: "",
+                role: "assistant",
+                type: "toolResult",
+                pending: true,
+                clientRequestId,
+                threadSlug: toolThreadSlug,
+                animate: true,
+              },
+            ]);
+          }
 
-      try {
-        const result = await AiTools.run(
-          tool,
-          workspace.slug,
-          activeThreadSlug,
-          file,
-          { signal: ctrl.signal, clientRequestId }
-        );
+          setMessageEmit("");
+          setPendingTool(null);
+          clearPromptInputDraft(toolThreadSlug ?? workspace.slug);
+          if (listening) endSTTSession();
 
-        // Replace optimistic assistant entry with real result.
-        setChatHistory((prev) =>
-          prev.map((msg) =>
-            msg.clientRequestId === clientRequestId
-              ? {
-                  ...msg,
-                  ...result,
-                  pending: false,
-                  animate: false,
-                }
-              : msg
-          )
-        );
-      } catch (e) {
-        if (e.name === "AbortError") {
-          // User cancelled or unmount — remove optimistic entries.
-          // Filter by both clientRequestId AND threadSlug to avoid cross-thread cleanup.
-          setChatHistory((prev) =>
-            prev.filter(
-              (msg) =>
-                (msg.clientRequestId !== clientRequestId ||
-                  msg.threadSlug !== activeThreadSlug) &&
-                (msg._toolClientId !== clientRequestId ||
-                  msg.threadSlug !== activeThreadSlug)
-            )
+          const ctrl = new AbortController();
+          toolAbortRef.current = ctrl;
+          setToolRequestInFlight(true);
+
+          try {
+            const result = await AiTools.run(
+              tool,
+              workspace.slug,
+              toolThreadSlug,
+              file,
+              { signal: ctrl.signal, clientRequestId }
+            );
+
+            // Replace optimistic assistant entry with real result.
+            if (mountedRef.current) {
+              setChatHistory((prev) =>
+                prev.map((msg) =>
+                  msg.clientRequestId === clientRequestId
+                    ? {
+                        ...msg,
+                        ...result,
+                        pending: false,
+                        animate: false,
+                      }
+                    : msg
+                )
+              );
+            }
+
+            // Navigate to the thread if we created one (SUCCESS response).
+            // Do this AFTER state updates so the component doesn't unmount mid-update.
+            if (createdThread && mountedRef.current) {
+              navigate(paths.workspace.thread(workspace.slug, createdThread.slug));
+            }
+          } catch (e) {
+            if (e.name === "AbortError") {
+              // User cancelled or unmount — remove optimistic entries.
+              // Filter by both clientRequestId AND threadSlug to avoid cross-thread cleanup.
+              if (mountedRef.current) {
+                setChatHistory((prev) =>
+                  prev.filter(
+                    (msg) =>
+                      (msg.clientRequestId !== clientRequestId ||
+                        msg.threadSlug !== toolThreadSlug) &&
+                      (msg._toolClientId !== clientRequestId ||
+                        msg.threadSlug !== toolThreadSlug)
+                  )
+                );
+              }
+              return;
+            }
+
+            // Map HTTP status codes to user-friendly error messages
+            const errorKey = e.httpStatus
+              ? getErrorKeyForStatus(e.httpStatus)
+              : "chat_window.aiTools.errors.upstream";
+            const errorMessage = t(errorKey, e.message);
+            showToast(errorMessage, "error");
+
+            // Replace optimistic assistant with error entry (server persists error
+            // rows so reloading stays consistent).
+            if (mountedRef.current) {
+              setChatHistory((prev) =>
+                prev.map((msg) =>
+                  msg.clientRequestId === clientRequestId
+                    ? {
+                        ...msg,
+                        pending: false,
+                        animate: false,
+                        error: true,
+                        content: errorMessage,
+                        toolResult: { tool, error: errorMessage, status: "error" },
+                      }
+                    : msg
+                )
+              );
+            }
+
+            // Navigate to the thread if we created one (even on error).
+            if (createdThread && mountedRef.current) {
+              navigate(paths.workspace.thread(workspace.slug, createdThread.slug));
+            }
+          } finally {
+            toolAbortRef.current = null;
+            setToolRequestInFlight(false);
+          }
+        } catch (threadCreationError) {
+          console.error("Failed to create thread for tool submission:", threadCreationError);
+          // Proceed with current behavior (threadless) as fallback
+          showToast(
+            t("chat_window.aiTools.errors.threadCreationFailed", "Failed to create thread"),
+            "error"
           );
-          return;
         }
+      };
 
-        // Map HTTP status codes to user-friendly error messages
-        const errorKey = e.httpStatus
-          ? getErrorKeyForStatus(e.httpStatus)
-          : "chat_window.aiTools.errors.upstream";
-        const errorMessage = t(errorKey, e.message);
-        showToast(errorMessage, "error");
-
-        // Replace optimistic assistant with error entry (server persists error
-        // rows so reloading stays consistent).
-        setChatHistory((prev) =>
-          prev.map((msg) =>
-            msg.clientRequestId === clientRequestId
-              ? {
-                  ...msg,
-                  pending: false,
-                  animate: false,
-                  error: true,
-                  content: errorMessage,
-                  toolResult: { tool, error: errorMessage, status: "error" },
-                }
-              : msg
-          )
-        );
-      } finally {
-        toolAbortRef.current = null;
-        setToolRequestInFlight(false);
-      }
+      submitTool();
       return;
     }
 
