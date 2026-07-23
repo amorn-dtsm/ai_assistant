@@ -1,4 +1,4 @@
-const crypto = require("crypto");
+﻿const crypto = require("crypto");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
@@ -150,11 +150,15 @@ async function resolveThread(workspace, threadSlug) {
   if (!threadSlug) return null;
 
   try {
-    const thread = await WorkspaceThread.get(workspace.id, threadSlug);
+    const thread = await WorkspaceThread.get({
+      slug: String(threadSlug),
+      workspace_id: workspace.id,
+    });
     return thread?.id || null;
   } catch {
     return null;
   }
+}
 }
 
 /**
@@ -321,7 +325,7 @@ function aiToolsEndpoints(app) {
 
   // ============================================================================
   // GET /workspace/:slug/ai-tools/:sourceId/download/:kind
-  // kind ∈ {original, txt, pdf}
+  // kind âˆˆ {original, txt, pdf}
   // ============================================================================
 
   app.get(

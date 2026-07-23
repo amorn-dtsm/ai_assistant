@@ -68,9 +68,10 @@ const AiTools = {
     if (!endpoint) throw new Error(`Unknown tool: ${tool}`);
 
     const formData = new FormData();
-    formData.append("file", file);
+    // CRITICAL: Append text fields BEFORE file to ensure multer populates req.body correctly
     if (threadSlug) formData.append("threadSlug", threadSlug);
     if (clientRequestId) formData.append("clientRequestId", clientRequestId);
+    formData.append("file", file);
 
     // Use baseHeaders() for auth but strip Content-Type so the browser
     // sets the multipart boundary automatically.
