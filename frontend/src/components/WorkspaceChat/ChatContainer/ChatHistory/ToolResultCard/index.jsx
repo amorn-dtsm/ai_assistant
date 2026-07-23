@@ -119,7 +119,8 @@ function ToolResultCard({ toolResult, content, pending, workspaceSlug }) {
         {tool === "xray" && (
           <XrayCard
             filename={filename}
-            findings={payload?.findings || content}
+            findings={payload?.findings}
+            tariffCodes={payload?.tariffCodes || []}
             labels={payload?.labels || []}
             sourceId={sourceId}
             workspaceSlug={workspaceSlug}
@@ -377,11 +378,67 @@ function SearchablePdfCard({
 }
 
 /**
- * X-ray Card - Displays findings as markdown with confidence labels
+ * X-ray Card - Displays tariff codes (new) or findings with labels (old, backward compat)
  */
-function XrayCard({ filename, findings, labels, sourceId, workspaceSlug }) {
+function XrayCard({ filename, findings, tariffCodes, labels, sourceId, workspaceSlug }) {
   const { t } = useTranslation();
 
+  // New tariff codes format
+  if (tariffCodes && tariffCodes.length > 0) {
+    return (
+      <div className="bg-zinc-800 light:bg-slate-100 light:border light:border-slate-200/50 rounded-xl p-4 space-y-3">
+        <div>
+          <h3 className="text-white light:text-slate-900 text-sm font-semibold">
+            {t("chat_window.aiTools.card.xrayCodesTitle")}
+          </h3>
+          <p className="text-zinc-400 light:text-slate-500 text-xs mt-1">
+            {filename}
+          </p>
+        </div>
+
+        <div className="bg-zinc-900 light:bg-slate-50 rounded-lg p-3 max-h-[400px] overflow-y-auto space-y-2">
+          {tariffCodes.map((tc, idx) => (
+            <div
+              key={idx}
+              data-testid="tariff-code-row"
+              className="flex items-start justify-between gap-x-3 pb-2 border-b border-zinc-700 light:border-slate-200 last:border-b-0 last:pb-0"
+            >
+              <div className="flex-1 min-w-0">
+                <p className="text-white light:text-slate-900 text-xs font-mono font-semibold">
+                  {tc.code}
+                </p>
+                {tc.description && (
+                  <p className="text-zinc-400 light:text-slate-600 text-xs mt-0.5">
+                    {tc.description}
+                  </p>
+                )}
+              </div>
+              <div className="flex-shrink-0">
+                <div className="inline-flex items-center px-2 py-1 rounded-full bg-blue-900/30 light:bg-blue-100 border border-blue-700/30 light:border-blue-200">
+                  <span className="text-blue-300 light:text-blue-700 text-xs font-medium">
+                    {Math.round(tc.confidence * 100)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {findings && (
+          <div className="bg-zinc-900 light:bg-slate-50 rounded-lg p-3 max-h-[200px] overflow-y-auto">
+            <p className="text-zinc-400 light:text-slate-600 text-xs font-semibold mb-1">
+              {t("chat_window.aiTools.card.findings")}
+            </p>
+            <p className="text-zinc-300 light:text-slate-700 text-xs leading-relaxed">
+              {findings}
+            </p>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // Old format (backward compatibility): findings + labels
   return (
     <div className="bg-zinc-800 light:bg-slate-100 light:border light:border-slate-200/50 rounded-xl p-4 space-y-3">
       <div>
@@ -393,14 +450,16 @@ function XrayCard({ filename, findings, labels, sourceId, workspaceSlug }) {
         </p>
       </div>
 
-      <div className="bg-zinc-900 light:bg-slate-50 rounded-lg p-3 max-h-[400px] overflow-y-auto">
-        <div
-          className="text-zinc-300 light:text-slate-700 text-xs leading-relaxed prose prose-invert light:prose prose-sm max-w-none"
-          dangerouslySetInnerHTML={{
-            __html: DOMPurify.sanitize(renderMarkdown(findings)),
-          }}
-        />
-      </div>
+      {findings && (
+        <div className="bg-zinc-900 light:bg-slate-50 rounded-lg p-3 max-h-[400px] overflow-y-auto">
+          <div
+            className="text-zinc-300 light:text-slate-700 text-xs leading-relaxed prose prose-invert light:prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(renderMarkdown(findings)),
+            }}
+          />
+        </div>
+      )}
 
       {labels && labels.length > 0 && (
         <div className="flex flex-wrap gap-2">

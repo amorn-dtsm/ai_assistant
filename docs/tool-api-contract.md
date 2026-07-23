@@ -101,7 +101,7 @@ Convert a scanned PDF to a searchable PDF with embedded text layer.
 
 ### 3. X-ray Analysis: `POST {XRAY_API_BASE_URL}/analyze`
 
-Analyze X-ray images and return findings and detected labels.
+Analyze X-ray images and return Thai customs tariff code predictions with confidence scores.
 
 **Request:**
 - Content-Type: `multipart/form-data`
@@ -111,22 +111,29 @@ Analyze X-ray images and return findings and detected labels.
 ```json
 {
   "ok": true,
-  "findings": "detailed findings text in markdown format",
-  "labels": [
+  "tariffCodes": [
     {
-      "name": "suspicious-object",
+      "code": "8471.30.90",
+      "description": "เครื่องประมวลผลข้อมูลอัตโนมัติแบบพกพา",
       "confidence": 0.87
+    },
+    {
+      "code": "8517.13.00",
+      "description": "โทรศัพท์สำหรับเครือข่ายเซลลูลาร์",
+      "confidence": 0.10
     }
-  ]
+  ],
+  "findings": "(optional prose description)"
 }
 ```
 
 **Fields:**
 - `ok` (boolean, required): Always `true` on success
-- `findings` (string, required): Detailed analysis findings (may include markdown formatting)
-- `labels` (array, optional): Detected objects/anomalies with confidence scores
-  - `name` (string): Label/classification name
+- `tariffCodes` (array, required): Predicted Thai customs tariff codes (HS codes) sorted by confidence descending
+  - `code` (string): HS tariff code (e.g., "8471.30.90")
+  - `description` (string, optional): Thai description of the tariff code
   - `confidence` (number): Confidence score (0.0 to 1.0)
+- `findings` (string, optional): Additional prose findings or analysis notes
 
 **Error Response (HTTP 4xx/5xx):**
 ```json
@@ -231,7 +238,7 @@ When a tool is executed, the result is persisted to chat history as a `toolResul
 - **payload** (object): Tool-specific result data
   - **OCR payload**: `{ text, pages, language }`
   - **Searchable PDF payload**: `{}` (empty; binary is stored separately)
-  - **X-ray payload**: `{ findings, labels }`
+  - **X-ray payload**: `{ tariffCodes, findings }`
 - **error** (object, optional): Present only when `status === "error"`
   - **code** (string): Error code from `ERROR_CODES` enum
   - **message** (string): Safe error message (no sensitive data)
@@ -269,7 +276,13 @@ If a base URL is not set, the tool is disabled and hidden from the UI. This acts
 
 ## Version History
 
-- **v1** (current): Initial contract specification
+- **v2** (current): X-ray response updated to tariff codes
+  - X-ray /analyze now returns `tariffCodes[]` (code, description?, confidence) instead of `labels[]`
+  - Tariff codes are Thai customs HS codes (พิกัดศุลกากร)
+  - Codes sorted by confidence descending
+  - Optional `findings` field for additional prose
+  - Note: This is the assumed contract until real API spec arrives
+- **v1**: Initial contract specification
   - 3 tools: OCR, Searchable PDF, X-ray Analysis
   - Bearer token authentication
   - Consistent error shape

@@ -136,7 +136,7 @@ app.post(
 
 /**
  * POST /analyze
- * Returns deterministic X-ray analysis response
+ * Returns deterministic X-ray analysis response with tariff codes
  */
 app.post("/analyze", requireAuth, upload.single("file"), async (req, res) => {
   const mode = checkMode(req);
@@ -151,8 +151,19 @@ app.post("/analyze", requireAuth, upload.single("file"), async (req, res) => {
 
   res.json({
     ok: true,
-    findings: "พบวัตถุต้องสงสัยลักษณะทึบรังสีบริเวณมุมล่างซ้าย (mock)",
-    labels: [{ name: "suspicious-object", confidence: 0.87 }],
+    tariffCodes: [
+      {
+        code: "8471.30.90",
+        description: "เครื่องประมวลผลข้อมูลอัตโนมัติแบบพกพา",
+        confidence: 0.87,
+      },
+      {
+        code: "8517.13.00",
+        description: "โทรศัพท์สำหรับเครือข่ายเซลลูลาร์",
+        confidence: 0.10,
+      },
+    ],
+    findings: "พบวัตถุลักษณะเป็นเครื่องใช้ไฟฟ้า (mock)",
   });
 });
 

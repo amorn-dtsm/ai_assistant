@@ -29,10 +29,31 @@ async function runXray({ workspace, user, threadId, file, sourceId }) {
       mimeType: mimetype,
     });
 
-    const { findings, labels } = result;
+    const { tariffCodes, findings } = result;
 
-    // Cap findings for LLM visibility
-    let forLlmText = findings;
+    // Validate tariffCodes is a non-empty array
+    if (!Array.isArray(tariffCodes) || tariffCodes.length === 0) {
+      throw new ToolApiError(
+        "INVALID_RESPONSE",
+        "X-ray API returned invalid tariffCodes"
+      );
+    }
+
+    // Format for LLM: ranked tariff code list with confidence
+    let forLlmText = `ผลวิเคราะห์พิกัดศุลกากรจากภาพเอกซเรย์ (${originalname}):\n`;
+    tariffCodes.forEach((tc, idx) => {
+      const confidence = Math.round(tc.confidence * 100);
+      forLlmText += `${idx + 1}. ${tc.code}`;
+      if (tc.description) {
+        forLlmText += ` — ${tc.description}`;
+      }
+      forLlmText += ` (ความเชื่อมั่น ${confidence}%)\n`;
+    });
+    if (findings) {
+      forLlmText += `\n${findings}`;
+    }
+
+    // Cap for LLM visibility
     if (forLlmText.length > FOR_LLM_CHAR_CAP) {
       forLlmText = forLlmText.substring(0, FOR_LLM_CHAR_CAP) + "\n[truncated]";
     }
@@ -46,8 +67,8 @@ async function runXray({ workspace, user, threadId, file, sourceId }) {
       sourceId,
       filename: originalname,
       payload: {
-        findings,
-        ...(labels && { labels }),
+        tariffCodes,
+        ...(findings && { findings }),
       },
       downloads: {
         original: true,
@@ -56,7 +77,7 @@ async function runXray({ workspace, user, threadId, file, sourceId }) {
 
     // Persist to history
     const response = {
-      text: findings,
+      text: forLlmText,
       sources: [],
       type: "toolResult",
       toolResult,
@@ -77,7 +98,7 @@ async function runXray({ workspace, user, threadId, file, sourceId }) {
       chatId: chat.id,
       sourceId,
       toolResult,
-      text: findings,
+      text: forLlmText,
     };
   } catch (error) {
     // Error path: persist error row and re-throw
