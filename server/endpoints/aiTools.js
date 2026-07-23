@@ -159,7 +159,6 @@ async function resolveThread(workspace, threadSlug) {
     return null;
   }
 }
-}
 
 /**
  * Map ToolApiError codes to HTTP status codes
